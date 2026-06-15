@@ -1,0 +1,146 @@
+Screen,Field,Current Value Logic,Source Table,Source Column,Status
+Login,Employee Name,seed list,users,name,CONFIRMED
+Login,Employee Code,seed list,users,employee_code,CONFIRMED
+Login,Role,seed list,users,role,CONFIRMED
+Login,Supabase Connection Status,env var presence check,(env),NEXT_PUBLIC_SUPABASE_URL,DERIVED
+Home,Search Query,UI state,(none),-,N/A
+Home,Role Filter,UI state,(none),-,N/A
+Home,Visible Employee Count,count of scoped users,users + employee_hierarchy,id,DERIVED
+Home,Employee Name,direct,users,name,CONFIRMED
+Home,Employee Code,direct,users,employee_code,CONFIRMED
+Home,Designation,direct,users,designation,CONFIRMED
+Home,Base Location,direct,users,base_location,CONFIRMED
+Home,Territory Name,lookup by territory_id,territories,name,LOOKUP
+Home,District Coverage,direct,users,district_coverage,CONFIRMED
+Home,Reporting Manager,self-join,users,reporting_manager_id -> name,LOOKUP
+Home,Current Revenue,seed constant,TO_BE_MAPPED (actuals/ERP),current_revenue,NEEDS_MAPPING
+Home,Target Achievement %,current_revenue / current_target * 100,(derived),-,DERIVED
+Home,AOP Status,direct,aop_master,status,CONFIRMED
+Home,Primary Action Label,derived from status+role,(derived),-,DERIVED
+Wizard,Target Employee Name,direct,users,name,CONFIRMED
+Wizard,Territory Name,lookup,territories,name,LOOKUP
+Wizard,Fiscal Year,constant,aop_master,fy,CONFIRMED
+Wizard,AOP Status,direct,aop_master,status,CONFIRMED
+Wizard,Saved At,direct,aop_master,updated_at,CONFIRMED
+Wizard,Read-only / Lock Banner,status+role rule,(derived),-,DERIVED
+Wizard-Revenue,Last Year Revenue,users.current_revenue (seed const),TO_BE_MAPPED (actuals/ERP),last_year_revenue,NEEDS_MAPPING
+Wizard-Revenue,Early Years Revenue LY,lastYear x 0.18 (hard ratio),TO_BE_MAPPED (actuals/ERP),early_years_revenue_ly,NEEDS_MAPPING
+Wizard-Revenue,Math & Science Revenue LY,lastYear x 0.32,TO_BE_MAPPED (actuals/ERP),math_science_revenue_ly,NEEDS_MAPPING
+Wizard-Revenue,Other Categories Revenue LY,lastYear x 0.15,TO_BE_MAPPED (actuals/ERP),other_categories_revenue_ly,NEEDS_MAPPING
+Wizard-Revenue,STEM Revenue LY,lastYear x 0.20,TO_BE_MAPPED (actuals/ERP),stem_revenue_ly,NEEDS_MAPPING
+Wizard-Revenue,Panel Revenue LY,lastYear x 0.15,TO_BE_MAPPED (actuals/ERP),panel_revenue_ly,NEEDS_MAPPING
+Wizard-Revenue,Current AOV,constant 145000,TO_BE_MAPPED (actuals/ERP),current_aov,NEEDS_MAPPING
+Wizard-Revenue,Current Revenue per School,constant 240000,TO_BE_MAPPED (actuals/ERP),current_revenue_per_school,NEEDS_MAPPING
+Wizard-Revenue,Total Revenue Target,user input,revenue_targets,total_revenue_target,CONFIRMED
+Wizard-Revenue,Early Years Target,user input,revenue_targets,early_years_target,CONFIRMED
+Wizard-Revenue,Math & Science Target,user input,revenue_targets,math_science_target,CONFIRMED
+Wizard-Revenue,Other Categories Target,user input,revenue_targets,other_categories_target,CONFIRMED
+Wizard-Revenue,STEM Target,user input,revenue_targets,stem_target,CONFIRMED
+Wizard-Revenue,Panel Target,user input,revenue_targets,panel_target,CONFIRMED
+Wizard-Revenue,Target AOV,user input (prefilled),revenue_targets,target_aov,CONFIRMED
+Wizard-Revenue,Target Revenue per School,user input (prefilled),revenue_targets,target_revenue_per_school,CONFIRMED
+Wizard-Revenue,Revenue Growth %,formula (see KPI),(derived/v_aop_kpis),-,DERIVED
+Wizard-Revenue,AOV Growth %,formula,(derived),-,DERIVED
+Wizard-Revenue,Category Sum,sum of 5 targets,(derived),-,DERIVED
+Wizard-Revenue,Sum vs Total,total - category sum,(derived),-,DERIVED
+Wizard-Universe,Total Schools,seed constant 320,TO_BE_MAPPED (school_master),total_schools,NEEDS_MAPPING
+Wizard-Universe,Active Schools,seed constant 110,TO_BE_MAPPED (school_master),active_schools,NEEDS_MAPPING
+Wizard-Universe,User Schools,seed constant 78,TO_BE_MAPPED (school_master),user_schools,NEEDS_MAPPING
+Wizard-Universe,Non-user Schools,seed constant 242,TO_BE_MAPPED (school_master),non_user_schools,NEEDS_MAPPING
+Wizard-Universe,Category Current Count,seed constant,TO_BE_MAPPED (school_master),current_count,NEEDS_MAPPING
+Wizard-Universe,Category Target Count,user input (prefilled = current),school_categories,target_count,CONFIRMED
+Wizard-Universe,Category Projected Revenue,user input,school_categories,projected_revenue,CONFIRMED
+Wizard-Universe,Category Projected Conversion %,user input,school_categories,projected_conversion,CONFIRMED
+Wizard-Universe,School Growth %,formula,(derived),-,DERIVED
+Wizard-Universe,Active School Addition Plan,user input,universe_planning,active_school_addition_plan,CONFIRMED
+Wizard-Universe,New School Acquisition Plan,user input,universe_planning,new_school_acquisition_plan,CONFIRMED
+Wizard-Universe,Retention Plan %,user input (prefilled 85),universe_planning,retention_plan,CONFIRMED
+Wizard-Universe,Bulk Deal Opportunities,user input,universe_planning,bulk_deal_opportunities,CONFIRMED
+Wizard-Universe,Key Account Plan,user input,universe_planning,key_account_plan,CONFIRMED
+Wizard-Universe,Chain School Expansion Plan,user input,universe_planning,chain_school_expansion_plan,CONFIRMED
+Wizard-Universe,Existing Distributor,user input,distributor_planning,existing_distributor,CONFIRMED
+Wizard-Universe,New Distributor Required,user input,distributor_planning,new_distributor_required,CONFIRMED
+Wizard-Universe,Large Institutional Opportunities,user input,distributor_planning,large_institutional_opportunities,CONFIRMED
+Wizard-Universe,Strategic Distributor Opportunity,user input,distributor_planning,strategic_distributor_opportunity,CONFIRMED
+Wizard-Universe,Premium School Strategy,user input (NOT rendered),universe_planning,premium_school_strategy,NEEDS_INPUT
+Wizard-Sampling,User Schools Sampling,user input,sampling_planning,user_schools_sampling,CONFIRMED
+Wizard-Sampling,Non-user Schools Sampling,user input,sampling_planning,non_user_schools_sampling,CONFIRMED
+Wizard-Sampling,Test Prep Sampling,user input,sampling_planning,test_prep_sampling,CONFIRMED
+Wizard-Sampling,Early Years Sampling,user input,sampling_planning,early_years_sampling,CONFIRMED
+Wizard-Sampling,Math & Science Sampling,user input,sampling_planning,ms_sampling,CONFIRMED
+Wizard-Sampling,STEM Sampling,user input,sampling_planning,stem_sampling,CONFIRMED
+Wizard-Sampling,Panel Sampling,user input,sampling_planning,panel_sampling,CONFIRMED
+Wizard-Sampling,Cost per Sample,user input (prefilled 1200),sampling_planning,cost_per_sample,CONFIRMED
+Wizard-Sampling,Unique Factor,user input (prefilled 0.7),sampling_planning,unique_sampling_factor,CONFIRMED
+Wizard-Sampling,User School Conversion %,user input,conversion_planning,user_school_conversion,CONFIRMED
+Wizard-Sampling,Non-user Conversion %,user input,conversion_planning,non_user_school_conversion,CONFIRMED
+Wizard-Sampling,Revenue from Sampling,user input,conversion_planning,sampling_to_revenue_estimate,CONFIRMED
+Wizard-Sampling,Orders from Sampling,user input,conversion_planning,sampling_to_orders_estimate,CONFIRMED
+Wizard-Sampling,New Schools from Sampling,user input,conversion_planning,sampling_to_new_schools_estimate,CONFIRMED
+Wizard-Sampling,Total Samples,sum 7 streams,(derived),-,DERIVED
+Wizard-Sampling,Sampling Cost,total x cost_per_sample,(derived),-,DERIVED
+Wizard-Sampling,Cost per Conversion,sampling_cost / est conversions,(derived),-,DERIVED
+Wizard-Training,User School Trainings,user input,training_planning,user_school_trainings,CONFIRMED
+Wizard-Training,Non-user School Trainings,user input,training_planning,non_user_school_trainings,CONFIRMED
+Wizard-Training,Digital Trainings,user input,training_planning,digital_trainings,CONFIRMED
+Wizard-Training,Physical Trainings,user input,training_planning,physical_trainings,CONFIRMED
+Wizard-Training,Teacher Workshops,user input,training_planning,teacher_workshops,CONFIRMED
+Wizard-Training,Principal Workshops,user input,training_planning,principal_workshops,CONFIRMED
+Wizard-Training,STEM Workshops,user input,training_planning,stem_workshops,CONFIRMED
+Wizard-Training,Product Demonstrations,user input,training_planning,product_demonstrations,CONFIRMED
+Wizard-Training,Cost per Training,user input (prefilled 8000),training_planning,cost_per_training,CONFIRMED
+Wizard-Training,Participants per Training,user input (prefilled 20),training_planning,participants_per_training,CONFIRMED
+Wizard-Training,Expected Revenue Impact,user input,training_planning,expected_revenue_impact,CONFIRMED
+Wizard-Cost,Sampling Cost,user input,investment_planning,sampling_cost,CONFIRMED
+Wizard-Cost,Reimbursement Cost,user input,investment_planning,reimbursement_cost,CONFIRMED
+Wizard-Cost,Travel Cost,user input,investment_planning,travel_cost,CONFIRMED
+Wizard-Cost,Distributor Support Cost,user input,investment_planning,distributor_support_cost,CONFIRMED
+Wizard-Cost,Event Cost,user input,investment_planning,event_cost,CONFIRMED
+Wizard-Cost,Gift Cost,user input,investment_planning,gift_cost,CONFIRMED
+Wizard-Cost,TOD Cost,user input,investment_planning,tod_cost,CONFIRMED
+Wizard-Cost,Promotional Cost,user input,investment_planning,promotional_cost,CONFIRMED
+Wizard-Cost,Scheme Cost,user input,investment_planning,scheme_cost,CONFIRMED
+Wizard-Cost,Discount Cost,user input,investment_planning,discount_cost,CONFIRMED
+Wizard-Cost,Strategic Account Spend,user input,investment_planning,strategic_account_investment,CONFIRMED
+Wizard-Cost,Other Cost,user input,investment_planning,other_cost,CONFIRMED
+Wizard-Cost,Total Cost,sum 12 lines (generated),investment_planning,total_investment,DERIVED
+Wizard-Cost,Cost % of Revenue,total_cost / total_target,(derived),-,DERIVED
+Wizard-Cost,ROI,total_target / total_cost,(derived),-,DERIVED
+Wizard-Collection,Collection %,REGION_COLLECTION_PCT[zone] else 85,TO_BE_MAPPED (region_policy),collection_pct,NEEDS_MAPPING
+Wizard-Collection,Total to Collect,total_target x pct/100,(derived),-,DERIVED
+Wizard-Collection,Collection by December,total_collection x 0.40,(derived/phasing),-,NEEDS_INPUT
+Wizard-Collection,Collection by March,total_collection x 0.70,(derived/phasing),-,NEEDS_INPUT
+Wizard-Collection,Collection by April,total_collection x 0.85,(derived/phasing),-,NEEDS_INPUT
+Wizard-Collection,Collection by June,total_collection x 1.00,(derived/phasing),-,NEEDS_INPUT
+Wizard-Review,Revenue Growth %,formula,(v_aop_kpis),-,DERIVED
+Wizard-Review,Cost %,formula,(v_aop_kpis),-,DERIVED
+Wizard-Review,ROI,formula,(v_aop_kpis),-,DERIVED
+Wizard-Review,Revenue per School,total_target / (target schools or active),(derived),-,NEEDS_MAPPING
+Wizard-Review,Validation Flags,threshold rules,(derived),-,NEEDS_INPUT
+Wizard-Review,Approval History,event log,approval_workflow,action/by_user_id/comment/created_at,CONFIRMED
+Wizard-Review,Comment,user input,approval_workflow,comment,CONFIRMED
+Wizard-Review,Submit/Approve/Reject/Request Changes,workflow action,approval_workflow,action,CONFIRMED
+Wizard-Review,Version,direct,aop_master,version,CONFIRMED
+Hiring,Territory,select,territories,id/name,LOOKUP
+Hiring,Base Location,prefill from territory then editable,hiring_requests,base_location,CONFIRMED
+Hiring,District,prefill from territory,hiring_requests,district,CONFIRMED
+Hiring,State,prefill from territory,hiring_requests,state,CONFIRMED
+Hiring,Designation,user input,hiring_requests,designation,CONFIRMED
+Hiring,Number of Positions,user input,hiring_requests,number_of_positions,CONFIRMED
+Hiring,Priority,user input,hiring_requests,priority,CONFIRMED
+Hiring,Reason,user input,hiring_requests,reason,CONFIRMED
+Hiring,Expected Revenue Impact,user input,hiring_requests,expected_revenue_impact,CONFIRMED
+Hiring,Hiring Timeline,user input,hiring_requests,hiring_timeline,CONFIRMED
+Hiring,Business Justification,user input,hiring_requests,business_justification,CONFIRMED
+Hiring,Raised By,lookup,users,requested_by_user_id -> name,LOOKUP
+Hiring,Status,workflow,hiring_requests,status,CONFIRMED
+Dashboard,Target vs Actual - Target,total_target,revenue_targets,total_revenue_target,CONFIRMED
+Dashboard,YTD Actual,demo formula 55+code%40,TO_BE_MAPPED (actuals),revenue_actual,NEEDS_MAPPING
+Dashboard,Achievement %,demo formula,TO_BE_MAPPED (actuals),-,NEEDS_MAPPING
+Dashboard,Revenue Growth %,formula,(v_aop_kpis),-,DERIVED
+Dashboard,Active Schools,from universe (seed),TO_BE_MAPPED (school_master),active_schools,NEEDS_MAPPING
+Dashboard,Team AOP Target,sum of subtree targets,revenue_targets + employee_hierarchy,total_revenue_target,DERIVED
+Dashboard,Plans Submitted,count status submitted/approved,aop_master,status,DERIVED
+Dashboard,At Risk,count YTD < 75% (demo),TO_BE_MAPPED (actuals),-,NEEDS_MAPPING
+Dashboard,Zone Target,sum by zone,revenue_targets + territories,total_revenue_target/zone,DERIVED
+Dashboard,Revenue at Risk,demo,TO_BE_MAPPED (actuals),-,NEEDS_MAPPING

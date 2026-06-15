@@ -1,0 +1,18 @@
+Field/KPI,Historical Requirement,Logic Required,Source Table,Status
+Last Year Revenue,Previous Year,Prior completed FY total actual per employee,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Early Years Revenue LY,Previous Year,Prior FY actual for Early Years category,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Math & Science Revenue LY,Previous Year,Prior FY actual for M&S category,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Other Categories Revenue LY,Previous Year,Prior FY actual for Other category,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+STEM Revenue LY,Previous Year,Prior FY actual for STEM category,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Panel Revenue LY,Previous Year,Prior FY actual for Panel category,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Current AOV,Trailing period,Sum revenue / sum orders over defined window,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+Current Revenue per School,Trailing period,Sum revenue / active school count,TO_BE_MAPPED (actuals + school master),NEEDS_MAPPING
+Universe current counts,Current snapshot,Count schools by status/category at FY start,TO_BE_MAPPED (school_master),NEEDS_MAPPING
+users.current_revenue,Previous Year,Prior period actual revenue per employee,TO_BE_MAPPED (actuals/ERP),NEEDS_MAPPING
+users.current_target,Previous Year,Prior period target per employee,TO_BE_MAPPED (target system),NEEDS_MAPPING
+Dashboard YTD Actual,YTD,Sum of month actuals in current FY,actuals_tracking (designed; empty),NEEDS_MAPPING
+Dashboard Achievement %,YTD,YTD actual / target,actuals_tracking + revenue_targets,NEEDS_MAPPING
+Monthly variance,MTD/Previous Month,Plan vs actual per month,monthly_reviews (designed; empty),NEEDS_MAPPING
+Quarterly variance,QTD/Previous Quarter,Plan vs actual per quarter,quarterly_reviews (designed; empty),NEEDS_MAPPING
+Prior AOP version,Last AOP,Read prior version for re-plan baseline,aop_master,CONFIRMED
+Revenue at Risk,YTD,Sum target where YTD below threshold,actuals_tracking + revenue_targets,NEEDS_MAPPING

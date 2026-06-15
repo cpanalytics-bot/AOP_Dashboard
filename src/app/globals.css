@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   AOP Platform — light, minimal design system
+   Type scale (rem @ 16px base):
+     display  28px / 600  — page titles
+     title    18px / 600  — section + card headings
+     body     14px / 400  — default text
+     label    13px / 500  — form labels
+     caption  12px / 400  — hints, captions, table headers
+   Palette: neutral grays + a single indigo accent. Soft semantic tints.
+--------------------------------------------------------------------------- */
+
+:root {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e8eaed;
+  --text: #1a1d21;
+  --text-muted: #6b7280;
+  --text-subtle: #9aa1ab;
+  --accent: #4f46e5;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.006em;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.02em;
+}
+
+/* Reusable type utilities */
+.t-display {
+  font-size: 1.75rem;
+  line-height: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+.t-title {
+  font-size: 1.125rem;
+  line-height: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  color: var(--text);
+}
+.t-card-heading {
+  font-size: 0.9375rem;
+  line-height: 1.4rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.t-body {
+  font-size: 0.875rem;
+  line-height: 1.4rem;
+  color: var(--text-muted);
+}
+.t-label {
+  font-size: 0.8125rem;
+  line-height: 1.1rem;
+  font-weight: 500;
+  color: #3f4651;
+}
+.t-caption {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--text-subtle);
+}
+.t-overline {
+  font-size: 0.6875rem;
+  line-height: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* Hide number input spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Subtle, thin scrollbars for the stepper rail */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

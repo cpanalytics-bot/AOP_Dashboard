@@ -1,0 +1,34 @@
+KPI,Business Meaning,Formula,Required Inputs,Source Tables,Source Columns,Aggregation,Status
+Revenue Growth %,Target vs last year,"(total_revenue_target - last_year_revenue) / last_year_revenue * 100",total target; last year revenue,revenue_targets,total_revenue_target; last_year_revenue,per AOP,NEEDS_MAPPING
+AOV Growth %,Target AOV vs current,"(target_aov - current_aov) / current_aov * 100",target_aov; current_aov,revenue_targets,target_aov; current_aov,per AOP,NEEDS_MAPPING
+Revenue per School Growth %,Target RPS vs current,"(target_rps - current_rps) / current_rps * 100",target_rps; current_rps,revenue_targets,target_revenue_per_school; current_revenue_per_school,per AOP,NEEDS_MAPPING
+School Growth %,Target schools vs current,"(sum target_count - sum current_count) / sum current_count * 100",category counts,school_categories,current_count; target_count,sum then ratio,NEEDS_MAPPING
+Retention %,Planned retention,retention_plan (direct),retention plan,universe_planning,retention_plan,per AOP,CONFIRMED
+Conversion %,Avg of two conversion rates,"(user_conv + non_user_conv) / 2",conversion %,conversion_planning,user_school_conversion; non_user_school_conversion,avg,CONFIRMED
+Cost % of Revenue,Spend efficiency,"total_cost / total_revenue_target * 100",total cost; total target,investment_planning; revenue_targets,total_investment; total_revenue_target,per AOP,CONFIRMED
+ROI %,Return on spend,"total_revenue_target / total_cost * 100",total target; total cost,revenue_targets; investment_planning,total_revenue_target; total_investment,per AOP,CONFIRMED
+Revenue per School,Target revenue density,"total_revenue_target / (sum target_count or active_schools)",total target; counts,revenue_targets; school_categories/universe_planning,total_revenue_target; target_count/active_schools,per AOP,NEEDS_MAPPING
+Total Sampling Schools,Sampling reach,sum of 7 sampling streams,7 sampling inputs,sampling_planning,user/non_user/test_prep/early_years/ms/stem/panel_sampling,sum,CONFIRMED
+Unique Sampling Schools,Dedup reach,round(total_samples * unique_factor),total; factor,sampling_planning,unique_sampling_factor,per AOP,CONFIRMED
+Sampling Cost,Sampling spend,total_samples * cost_per_sample,total; cost/sample,sampling_planning,cost_per_sample,per AOP,CONFIRMED
+Estimated Conversions,Expected wins,"user_samp*user_conv% + non_user_samp*non_user_conv%",sampling + conversion,sampling_planning; conversion_planning,conversion %,per AOP,CONFIRMED
+Cost per Conversion,Acquisition cost,sampling_cost / estimated_conversions,sampling cost; conversions,sampling_planning; conversion_planning,-,per AOP,CONFIRMED
+Revenue per Sample,Sampling yield,sampling_to_revenue_estimate / total_samples,rev estimate; total,conversion_planning; sampling_planning,sampling_to_revenue_estimate,per AOP,CONFIRMED
+Total Trainings,Training volume,sum of 8 training types,8 inputs,training_planning,8 training columns,sum,CONFIRMED
+Training Cost,Training spend,total_trainings * cost_per_training,trainings; cost,training_planning,cost_per_training,per AOP,CONFIRMED
+Cost per School (training),Training intensity,"training_cost / (user+non_user trainings or active_schools)",trainings; active,training_planning; universe_planning,active_schools,per AOP,NEEDS_MAPPING
+Total Participants,Reach of training,total_trainings * participants_per_training,trainings; participants,training_planning,participants_per_training,per AOP,CONFIRMED
+Cost per Participant,Per-head training cost,training_cost / total_participants,cost; participants,training_planning,-,per AOP,CONFIRMED
+Total Cost,Total budget,sum of 12 cost lines,12 cost lines,investment_planning,total_investment (generated),sum,CONFIRMED
+ROI (x),Return multiple,total_revenue_target / total_cost,target; cost,revenue_targets; investment_planning,-,per AOP,CONFIRMED
+Cost per School (cost),Spend per active school,total_cost / active_schools,cost; active,investment_planning; universe_planning,active_schools,per AOP,NEEDS_MAPPING
+Cost per Revenue Unit,Spend per INR revenue,total_cost / total_revenue_target,cost; target,investment_planning; revenue_targets,-,per AOP,CONFIRMED
+Total Collection Target,Cash to collect,total_revenue_target * collection_pct/100,target; region %,revenue_targets; region_policy,collection_pct,per AOP,NEEDS_MAPPING
+Collection by Dec/Mar/Apr/Jun,Phased cash milestones,"total_collection * {0.40,0.70,0.85,1.00}",total collection,(derived/phasing),-,per AOP,NEEDS_INPUT
+Target Achievement % (Home),Prior actual vs target,current_revenue / current_target * 100,actual; target,TO_BE_MAPPED (actuals/target),current_revenue; current_target,per user,NEEDS_MAPPING
+YTD Achievement % (Dashboard),Year-to-date attainment,demo: 55 + (code charCode % 40),YTD actual,TO_BE_MAPPED (actuals),revenue_actual,YTD sum,NEEDS_MAPPING
+Team AOP Target,Sum of subtree targets,sum(total_revenue_target over subtree),targets; hierarchy,revenue_targets; employee_hierarchy,total_revenue_target,sum,DERIVED
+Plans Submitted/Approved,Workflow counts,count by status,statuses,aop_master,status,count,CONFIRMED
+At Risk,Below 75% YTD,count(YTD% < 75),YTD,TO_BE_MAPPED (actuals),-,count,NEEDS_MAPPING
+Zone Target,Total target by zone,sum by zone,targets; territory,revenue_targets; territories,total_revenue_target; zone,sum,DERIVED
+Revenue at Risk,At-risk target value,sum target where at risk,targets; YTD,revenue_targets; actuals,total_revenue_target,sum,NEEDS_MAPPING

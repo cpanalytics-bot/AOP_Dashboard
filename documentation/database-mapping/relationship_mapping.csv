@@ -1,0 +1,25 @@
+Parent Table,Child Table,Relationship Type,Business Reason
+territories,users,1:M,An employee belongs to one territory; a territory has many employees
+users,users,1:M (self),Reporting manager has many direct reports (reporting_manager_id)
+users,employee_hierarchy,M:M (closure),Each user maps to all ancestors/descendants for subtree visibility
+users,aop_master,1:1 per FY,One AOP per employee per fiscal year
+aop_master,revenue_targets,1:1,One revenue plan per AOP
+aop_master,universe_planning,1:1,One universe header per AOP
+aop_master,school_categories,1:M,Five category rows per AOP
+aop_master,distributor_planning,1:1,One distributor plan per AOP
+aop_master,sampling_planning,1:1,One sampling plan per AOP
+aop_master,conversion_planning,1:1,One conversion plan per AOP
+aop_master,training_planning,1:1,One training plan per AOP
+aop_master,investment_planning,1:1,One cost plan per AOP
+aop_master,approval_workflow,1:M,Many approval events per AOP
+users,hiring_requests,1:M,A manager raises many hiring requests
+territories,hiring_requests,1:M,A hiring request targets one territory
+users,actuals_tracking,1:M,Many monthly actuals per employee
+aop_master,monthly_reviews,1:M,Many monthly reviews per AOP
+aop_master,quarterly_reviews,1:M,Many quarterly reviews per AOP
+territories (zone),region_collection_policy,M:1 (PROPOSED),Many territories share one zone collection policy
+school_master,sales_actuals,1:M (PROPOSED),Many actual transactions per school
+territories,school_master,1:M (PROPOSED),Many schools per territory
+aop_master,revenue_phasing,1:M (PROPOSED),Monthly target split rows per AOP
+aop_master,collection_planning,1:1 (PROPOSED),Persisted collection plan per AOP if stored
+fiscal_calendar,aop_master,1:M (PROPOSED),Many AOPs per fiscal year

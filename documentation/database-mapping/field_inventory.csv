@@ -1,0 +1,206 @@
+Screen,Section,Field Name,Field Type,Editable,Mandatory
+Login,Persona List,Employee Name,Display,No,No
+Login,Persona List,Employee Code,Display,No,No
+Login,Persona List,Designation,Display,No,No
+Login,Persona List,Role,Badge,No,No
+Login,System,Supabase Connection Status,Badge (env-derived),No,No
+Home,Filters,Search Query,Text,Yes,No
+Home,Filters,Role Filter (ALL/BDM/BDA),Dropdown,Yes,No
+Home,Header,Visible Employee Count,Calculated,No,No
+Home,Employee Card,Employee Name,Display,No,No
+Home,Employee Card,Employee Code,Display,No,No
+Home,Employee Card,Designation,Display,No,No
+Home,Employee Card,Base Location,Display,No,No
+Home,Employee Card,Territory Name,Lookup,No,No
+Home,Employee Card,District Coverage,Display,No,No
+Home,Employee Card,Reporting Manager,Lookup,No,No
+Home,Employee Card,Current Revenue,Display (INR),No,No
+Home,Employee Card,Target Achievement %,Calculated,No,No
+Home,Employee Card,AOP Status,Badge,No,No
+Home,Employee Card,Primary Action Label,Derived,No,No
+Home,Employee Card,Open AOP / Dashboard,Action,Yes,No
+Home,Employee Card,Self indicator (You),Derived,No,No
+Wizard,Header,Target Employee Name,Display,No,No
+Wizard,Header,Designation,Display,No,No
+Wizard,Header,Territory Name,Lookup,No,No
+Wizard,Header,Fiscal Year,Display,No,No
+Wizard,Header,AOP Status,Badge,No,No
+Wizard,Header,Saved At,Display,No,No
+Wizard,Header,Read-only / Lock Banner,Derived,No,No
+Wizard,Stepper,Stage Step Indicator,Display,No,No
+Wizard-Stage1-Hiring,Form,Add Request (all Hiring form fields),Form,Yes (BDM/ZDM),Yes
+Wizard-Stage1-Hiring,List,"Requests list (positions, designation, district, reason, priority, timeline, justification, impact, status)",Table,No,No
+Wizard-Revenue,Last Year (RO),Last Year Revenue,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Early Years Revenue LY,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Math & Science Revenue LY,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Other Categories Revenue LY,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),STEM Revenue LY,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Panel Revenue LY,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Current AOV,Number (INR),No,No
+Wizard-Revenue,Last Year (RO),Current Revenue per School,Number (INR),No,No
+Wizard-Revenue,Targets,Total Revenue Target,Number (INR),Yes,Yes
+Wizard-Revenue,Targets,Early Years Target,Number (INR),Yes,No
+Wizard-Revenue,Targets,Math & Science Target,Number (INR),Yes,No
+Wizard-Revenue,Targets,Other Categories Target,Number (INR),Yes,No
+Wizard-Revenue,Targets,STEM Target,Number (INR),Yes,No
+Wizard-Revenue,Targets,Panel Target,Number (INR),Yes,No
+Wizard-Revenue,Targets,Auto-split by Last Year,Action,Yes,No
+Wizard-Revenue,AOV,Target AOV,Number (INR),Yes,Yes
+Wizard-Revenue,AOV,Target Revenue per School,Number (INR),Yes,No
+Wizard-Revenue,Calc,Revenue Growth %,Calculated,No,No
+Wizard-Revenue,Calc,AOV Growth %,Calculated,No,No
+Wizard-Revenue,Calc,Category Sum,Calculated,No,No
+Wizard-Revenue,Calc,Sum vs Total (mismatch),Calculated,No,No
+Wizard-Universe,Current,Total Schools,Number,Yes,No
+Wizard-Universe,Current,Active Schools,Number,Yes,No
+Wizard-Universe,Current,User Schools,Number,Yes,No
+Wizard-Universe,Current,Non-user Schools,Number,Yes,No
+Wizard-Universe,Categories,Category label (x5),Display,No,No
+Wizard-Universe,Categories,Current Count (per category),Number,Yes,No
+Wizard-Universe,Categories,Target Count (per category),Number,Yes,No
+Wizard-Universe,Categories,Projected Revenue (per category),Number (INR),Yes,No
+Wizard-Universe,Categories,Projected Conversion % (per category),Percent,Yes,No
+Wizard-Universe,Calc,Schools Now,Calculated,No,No
+Wizard-Universe,Calc,Schools Target,Calculated,No,No
+Wizard-Universe,Calc,School Growth %,Calculated,No,No
+Wizard-Universe,Calc,Expected Revenue (categories),Calculated,No,No
+Wizard-Universe,Growth Plans,Active School Addition Plan,Number,Yes,No
+Wizard-Universe,Growth Plans,New School Acquisition Plan,Number,Yes,No
+Wizard-Universe,Growth Plans,Retention Plan %,Percent,Yes,No
+Wizard-Universe,Growth Plans,Bulk Deal Opportunities,Number,Yes,No
+Wizard-Universe,Growth Plans,Key Account Plan,LongText,Yes,No
+Wizard-Universe,Growth Plans,Chain School Expansion Plan,LongText,Yes,No
+Wizard-Universe,Distributor,Existing Distributor,Text,Yes,No
+Wizard-Universe,Distributor,New Distributor Required,Boolean,Yes,No
+Wizard-Universe,Distributor,Large Institutional Opportunities,Number,Yes,No
+Wizard-Universe,Distributor,Strategic Distributor Opportunity,LongText,Yes,No
+Wizard-Universe,HIDDEN,Premium School Strategy (modelled NOT rendered),LongText,N/A,No
+Wizard-Sampling,Volume,User Schools Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Non-user Schools Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Test Prep Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Early Years Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Math & Science Sampling,Number,Yes,No
+Wizard-Sampling,Volume,STEM Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Panel Sampling,Number,Yes,No
+Wizard-Sampling,Volume,Cost per Sample,Number (INR),Yes,No
+Wizard-Sampling,Volume,Unique Factor (0-1),Number,Yes,No
+Wizard-Sampling,Conversion,User School Conversion %,Percent,Yes,No
+Wizard-Sampling,Conversion,Non-user Conversion %,Percent,Yes,No
+Wizard-Sampling,Conversion,Revenue from Sampling,Number (INR),Yes,No
+Wizard-Sampling,Conversion,Orders from Sampling,Number,Yes,No
+Wizard-Sampling,Conversion,New Schools from Sampling,Number,Yes,No
+Wizard-Sampling,Calc,Total Samples,Calculated,No,No
+Wizard-Sampling,Calc,Unique Schools,Calculated,No,No
+Wizard-Sampling,Calc,Sampling Cost,Calculated,No,No
+Wizard-Sampling,Calc,Cost per Conversion,Calculated,No,No
+Wizard-Sampling,Calc,Revenue per Sample,Calculated,No,No
+Wizard-Sampling,Calc,Estimated Conversions (internal),Calculated,No,No
+Wizard-Training,Trainings,User School Trainings,Number,Yes,No
+Wizard-Training,Trainings,Non-user School Trainings,Number,Yes,No
+Wizard-Training,Trainings,Digital Trainings,Number,Yes,No
+Wizard-Training,Trainings,Physical Trainings,Number,Yes,No
+Wizard-Training,Trainings,Teacher Workshops,Number,Yes,No
+Wizard-Training,Trainings,Principal Workshops,Number,Yes,No
+Wizard-Training,Trainings,STEM Workshops,Number,Yes,No
+Wizard-Training,Trainings,Product Demonstrations,Number,Yes,No
+Wizard-Training,Assumptions,Cost per Training,Number (INR),Yes,No
+Wizard-Training,Assumptions,Participants per Training,Number,Yes,No
+Wizard-Training,Assumptions,Expected Revenue Impact,Number (INR),Yes,No
+Wizard-Training,Calc,Total Trainings,Calculated,No,No
+Wizard-Training,Calc,Training Cost,Calculated,No,No
+Wizard-Training,Calc,Cost per School,Calculated,No,No
+Wizard-Training,Calc,Participants,Calculated,No,No
+Wizard-Training,Calc,Cost per Participant,Calculated,No,No
+Wizard-Cost,Cost Lines,Sampling Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Reimbursement Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Travel Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Distributor Support Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Event Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Gift Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,TOD Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Promotional Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Scheme Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Discount Cost,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Strategic Account Spend,Number (INR),Yes,No
+Wizard-Cost,Cost Lines,Other Cost,Number (INR),Yes,No
+Wizard-Cost,Calc,Total Cost,Calculated,No,No
+Wizard-Cost,Calc,Cost % of Revenue,Calculated,No,No
+Wizard-Cost,Calc,ROI,Calculated,No,No
+Wizard-Cost,Calc,Cost per School,Calculated,No,No
+Wizard-Cost,Calc,Cost per Revenue Unit,Calculated,No,No
+Wizard-Collection,Collection,Collection %,Auto-populated,No,No
+Wizard-Collection,Collection,Total to Collect,Calculated,No,No
+Wizard-Collection,Collection,Collection by December,Calculated,No,No
+Wizard-Collection,Collection,Collection by March,Calculated,No,No
+Wizard-Collection,Collection,Collection by April,Calculated,No,No
+Wizard-Collection,Collection,Collection by June,Calculated,No,No
+Wizard-Review,KPIs,Revenue Growth %,Calculated,No,No
+Wizard-Review,KPIs,AOV Growth %,Calculated,No,No
+Wizard-Review,KPIs,School Growth %,Calculated,No,No
+Wizard-Review,KPIs,Retention %,Calculated,No,No
+Wizard-Review,KPIs,Conversion %,Calculated,No,No
+Wizard-Review,KPIs,Cost %,Calculated,No,No
+Wizard-Review,KPIs,ROI,Calculated,No,No
+Wizard-Review,KPIs,Revenue per School,Calculated,No,No
+Wizard-Review,Flags,Validation Flags,Calculated,No,No
+Wizard-Review,Summary,Revenue Plan summary,Display,No,No
+Wizard-Review,Summary,Universe Plan summary,Display,No,No
+Wizard-Review,Summary,Sampling Plan summary,Display,No,No
+Wizard-Review,Summary,Training Plan summary,Display,No,No
+Wizard-Review,Summary,Cost Plan summary,Display,No,No
+Wizard-Review,Summary,Collection Plan summary,Display,No,No
+Wizard-Review,Summary,Approval History,Table,No,No
+Wizard-Review,Actions,Comment,LongText,Yes,No
+Wizard-Review,Actions,Submit / Send for approval,Action,Yes (editor),No
+Wizard-Review,Actions,Approve,Action,Yes (approver),No
+Wizard-Review,Actions,Reject,Action,Yes (approver),No
+Wizard-Review,Actions,Request Changes,Action,Yes (approver),No
+Wizard-Review,Meta,AOP Status,Status,No,No
+Wizard-Review,Meta,Version,Display,No,No
+Hiring,Form,Territory,Lookup/Dropdown,Yes,Yes
+Hiring,Form,Base Location,Text,Yes,Yes
+Hiring,Form,District,Text,Yes,Yes
+Hiring,Form,State,Text,Yes,Yes
+Hiring,Form,Designation,Dropdown,Yes,Yes
+Hiring,Form,Number of Positions,Number,Yes,Yes
+Hiring,Form,Priority,Dropdown,Yes,Yes
+Hiring,Form,Reason,Dropdown,Yes,Yes
+Hiring,Form,Expected Revenue Impact,Number (INR),Yes,No
+Hiring,Form,Hiring Timeline,Dropdown (Month),Yes,Yes
+Hiring,Form,Business Justification,LongText,Yes,Yes (min 20)
+Hiring,List,Positions x Designation,Display,No,No
+Hiring,List,Territory Name,Lookup,No,No
+Hiring,List,District / State,Display,No,No
+Hiring,List,Reason,Display,No,No
+Hiring,List,Priority,Display,No,No
+Hiring,List,Timeline,Display,No,No
+Hiring,List,Revenue Impact,Display (INR),No,No
+Hiring,List,Raised By,Lookup,No,No
+Hiring,List,Business Justification,Display,No,No
+Hiring,List,Status,Badge,No,No
+Hiring,List,Status Update,Dropdown,Yes (ZDM),No
+Dashboard,Individual,Target vs Actual - Target,Display (INR),No,No
+Dashboard,Individual,YTD Actual (DEMO),Calculated,No,No
+Dashboard,Individual,Achievement % (DEMO),Calculated,No,No
+Dashboard,Individual,Revenue Growth %,Calculated,No,No
+Dashboard,Individual,School Growth %,Calculated,No,No
+Dashboard,Individual,Cost %,Calculated,No,No
+Dashboard,Individual,ROI,Calculated,No,No
+Dashboard,Individual,Active Schools,Display,No,No
+Dashboard,Individual,Target Schools,Calculated,No,No
+Dashboard,Individual,New Acquisition Plan,Display,No,No
+Dashboard,Individual,Retention Plan,Display,No,No
+Dashboard,Individual,Total Sampling Schools,Calculated,No,No
+Dashboard,Individual,Est. Conversions,Calculated,No,No
+Dashboard,Individual,Cost per Conversion,Calculated,No,No
+Dashboard,Individual,User Conversion %,Display,No,No
+Dashboard,Team,Team AOP Target,Calculated,No,No
+Dashboard,Team,Plans Submitted,Calculated,No,No
+Dashboard,Team,Approved,Calculated,No,No
+Dashboard,Team,At Risk (<75%) (DEMO),Calculated,No,No
+Dashboard,Team,"Comparison table (Employee, Role, Target, Growth, YTD, Status)",Table,No,No
+Dashboard,Team,Open link,Action,Yes,No
+Dashboard,Leadership,Target by BDM line (+ share %),Calculated,No,No
+Dashboard,Leadership,Zone Target,Calculated,No,No
+Dashboard,Leadership,Plan Completion %,Calculated,No,No
+Dashboard,Leadership,Revenue at Risk (DEMO),Calculated,No,No

@@ -1,0 +1,10 @@
+Proposed Table,Why Needed,Alternative Considered,Final Decision
+school_master,"Universe counts, RPS, dedup, scoring all require real per-school records not aggregate counts","Keep aggregate counts on universe_planning",PROPOSE - counts cannot represent per-school facts or feed RPS/dedup
+sales_actuals (or ERP view),"LY revenue, current AOV/RPS, YTD achievement all need transactional actuals","Reuse actuals_tracking monthly summary",PROPOSE/INTEGRATE - need confirmed feed; actuals_tracking is summary only
+revenue_phasing,"Monthly target phasing for honest monthly/quarterly variance","Flat 1/12 split in code",PROPOSE - flat split misleads reviews
+region_collection_policy,"Collection % and phasing are hard-coded in code today","Keep constants in calc.ts",PROPOSE - policy must be data owned by Finance
+collection_planning,"Stage 7 is only a TypeScript field; nothing persists collection_percent or milestones","Always recompute from revenue_targets + policy",DECIDE WITH USER - persist if region % can change per AOP; else derive
+fiscal_calendar,"Define FY/periods for phasing, YTD, current/last logic","Hard-code FY26-27",PROPOSE (light) - needed once multi-FY or real YTD
+category_master,"Product categories are enums/strings today","Keep Postgres enum",DEFER - enum acceptable until categories churn
+hiring_approval,"If hiring needs its own multi-step approval chain","Reuse hiring_requests.status enum",DEFER - single status enum sufficient for v1
+incentive / forecast / scoring tables,"Roadmap phases 3-5",-,DEFER - out of v1 scope

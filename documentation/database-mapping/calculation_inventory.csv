@@ -1,0 +1,42 @@
+Calculation,Formula,Variables,Missing Variables,Source Tables,Status
+categorySumTarget,EY+M&S+Other+STEM+Panel targets,5 category targets,none,revenue_targets,CONFIRMED
+categoryMismatch,total_revenue_target - categorySumTarget,total + 5 targets,none,revenue_targets,CONFIRMED
+revenueGrowthPct,"(total_revenue_target - last_year_revenue)/last_year_revenue*100",total; last year,last_year_revenue source,revenue_targets,NEEDS_MAPPING
+aovGrowthPct,"(target_aov - current_aov)/current_aov*100",target/current AOV,current_aov source,revenue_targets,NEEDS_MAPPING
+revenuePerSchoolGrowthPct,"(target_rps - current_rps)/current_rps*100",target/current RPS,current_rps source,revenue_targets,NEEDS_MAPPING
+currentTotalFromCategories,sum current_count,5 current counts,real counts source,school_categories,NEEDS_MAPPING
+targetTotalFromCategories,sum target_count,5 target counts,none,school_categories,CONFIRMED
+schoolGrowthPct,"(targetTotal - currentTotal)/currentTotal*100",counts,current counts source,school_categories,NEEDS_MAPPING
+projectedCategoryRevenue,sum projected_revenue,5 projected revenue,none,school_categories,CONFIRMED
+netNewSchools,new_school_acquisition_plan + active_school_addition_plan,2 plans,none,universe_planning,CONFIRMED
+totalSamplingSchools,sum of 7 streams,7 sampling,none,sampling_planning,CONFIRMED
+uniqueSamplingSchools,round(total * unique_factor),total; factor,none,sampling_planning,CONFIRMED
+samplingCost,total * cost_per_sample,total; cost,none,sampling_planning,CONFIRMED
+estimatedConversions,"user_samp*user_conv% + non_user_samp*non_user_conv%",sampling; conversion,none,sampling_planning; conversion_planning,CONFIRMED
+costPerConversion,sampling_cost / estimated_conversions,sampling cost; conv,none,sampling_planning; conversion_planning,CONFIRMED
+revenuePerSample,sampling_to_revenue_estimate / total_samples,rev estimate; total,none,conversion_planning; sampling_planning,CONFIRMED
+totalTrainings,sum of 8 types,8 trainings,none,training_planning,CONFIRMED
+trainingCost,total_trainings * cost_per_training,trainings; cost,none,training_planning,CONFIRMED
+trainingCostPerSchool,"training_cost / (user+non_user trainings or active_schools)",trainings; active,active_schools source,training_planning; universe_planning,NEEDS_MAPPING
+totalParticipants,total_trainings * participants_per_training,trainings; participants,none,training_planning,CONFIRMED
+costPerParticipant,training_cost / total_participants,cost; participants,none,training_planning,CONFIRMED
+totalInvestment,sum of 12 cost lines,12 lines,none,investment_planning,CONFIRMED
+investmentPctOfRevenue,total_cost / total_target * 100,cost; target,none,investment_planning; revenue_targets,CONFIRMED
+roiProjection,total_target / total_cost,target; cost,none,revenue_targets; investment_planning,CONFIRMED
+investmentCostPerSchool,total_cost / active_schools,cost; active,active_schools source,investment_planning; universe_planning,NEEDS_MAPPING
+costPerRevenueUnit,total_cost / total_target (4dp),cost; target,none,investment_planning; revenue_targets,CONFIRMED
+computeCollection.totalCollectionTarget,total_target * collection_pct/100,target; pct,collection_pct source,revenue_targets; region_policy,NEEDS_MAPPING
+computeCollection.byDec,totalCollection * 0.40,total collection,phasing owner,(derived),NEEDS_INPUT
+computeCollection.byMarch,totalCollection * 0.70,total collection,phasing owner,(derived),NEEDS_INPUT
+computeCollection.byApril,totalCollection * 0.85,total collection,phasing owner,(derived),NEEDS_INPUT
+computeCollection.byJune,totalCollection * 1.00,total collection,phasing owner,(derived),NEEDS_INPUT
+reviewConversionPct,"(user_conv + non_user_conv)/2",conversion %,none,conversion_planning,CONFIRMED
+reviewRevenuePerSchool,"total_target / (targetTotal or active_schools)",target; counts,denominator decision,revenue_targets; school_categories/universe_planning,NEEDS_MAPPING
+flag_categoryMismatch,categoryMismatch > 1 => error,mismatch,none,revenue_targets,CONFIRMED
+flag_aggressiveGrowth,revenueGrowthPct > 60 => warn,growth,threshold owner,revenue_targets,NEEDS_INPUT
+flag_negativeGrowth,revenueGrowthPct < 0 => warn,growth,none,revenue_targets,CONFIRMED
+flag_impliedRps,implied rps > target_aov * 50 => warn,rps; aov,multiplier owner,revenue_targets,NEEDS_INPUT
+flag_newSchoolsExceed,sampling_to_new_schools > non_user_schools => error,new schools; non-user,non_user source,conversion_planning; universe_planning,NEEDS_MAPPING
+flag_zeroSampling,totalSamplingSchools == 0 => info,total,none,sampling_planning,CONFIRMED
+autoSplitRevenue,total * (LY_category / sum LY),total; LY splits,LY split source,revenue_targets,NEEDS_MAPPING
+targetAchievementPct,current_revenue / current_target * 100,actual; target,both sources,users (actuals/target),NEEDS_MAPPING

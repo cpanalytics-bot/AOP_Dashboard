@@ -1,0 +1,32 @@
+Field,Entry Type,Pre-fill Logic,Source Table,Source Column,Status
+Total Revenue Target,Manual,none,revenue_targets,total_revenue_target,CONFIRMED
+Early Years Target,Manual,auto-split available (LY share),revenue_targets,early_years_target,CONFIRMED
+Math & Science Target,Manual,auto-split available,revenue_targets,math_science_target,CONFIRMED
+Other Categories Target,Manual,auto-split available,revenue_targets,other_categories_target,CONFIRMED
+STEM Target,Manual,auto-split available,revenue_targets,stem_target,CONFIRMED
+Panel Target,Manual,auto-split available,revenue_targets,panel_target,CONFIRMED
+Target AOV,Manual (pre-filled),defaults to current_aov (145000 const),revenue_targets,target_aov,NEEDS_MAPPING
+Target Revenue per School,Manual (pre-filled),defaults to current_revenue_per_school (240000 const),revenue_targets,target_revenue_per_school,NEEDS_MAPPING
+Last Year Revenue,Auto Populated,current_revenue x ratio,TO_BE_MAPPED (actuals/ERP),last_year_revenue,NEEDS_MAPPING
+LY category splits,Auto Populated,lastYear x fixed ratios,TO_BE_MAPPED (actuals/ERP),*_revenue_ly,NEEDS_MAPPING
+Current AOV,Auto Populated,constant 145000,TO_BE_MAPPED (actuals/ERP),current_aov,NEEDS_MAPPING
+Current Revenue per School,Auto Populated,constant 240000,TO_BE_MAPPED (actuals/ERP),current_revenue_per_school,NEEDS_MAPPING
+Universe current counts,Auto Populated,seed constants,TO_BE_MAPPED (school_master),total/active/user/non_user,NEEDS_MAPPING
+Category Current Count,Auto Populated,seed constant,TO_BE_MAPPED (school_master),current_count,NEEDS_MAPPING
+Category Target Count,Manual (pre-filled),defaults to current_count,school_categories,target_count,CONFIRMED
+Retention Plan %,Manual (pre-filled),defaults to 85 const,universe_planning,retention_plan,CONFIRMED
+Cost per Sample,Manual (pre-filled),defaults to 1200 const,sampling_planning,cost_per_sample,CONFIRMED
+Unique Factor,Manual (pre-filled),defaults to 0.7 const,sampling_planning,unique_sampling_factor,CONFIRMED
+Cost per Training,Manual (pre-filled),defaults to 8000 const,training_planning,cost_per_training,CONFIRMED
+Participants per Training,Manual (pre-filled),defaults to 20 const,training_planning,participants_per_training,CONFIRMED
+Collection %,Auto Populated,REGION_COLLECTION_PCT[zone] else 85,TO_BE_MAPPED (region_policy),collection_pct,NEEDS_MAPPING
+Collection milestones,Calculated,total_target x pct x phasing,(derived),-,NEEDS_INPUT
+Hiring Base Location,Auto Populated,copy from territory on select,territories,base_location,LOOKUP
+Hiring District,Auto Populated,copy from territory,territories,district,LOOKUP
+Hiring State,Auto Populated,copy from territory,territories,state,LOOKUP
+Territory Name,Derived,join by territory_id,territories,name,LOOKUP
+Reporting Manager,Derived,users self-join,users,reporting_manager_id -> name,LOOKUP
+Raised By,Derived,join by requested_by_user_id,users,name,LOOKUP
+Target Achievement %,Calculated,current_revenue / current_target,(derived),-,NEEDS_MAPPING
+All Stage 7 collection values,Calculated,target x pct x phasing,(derived),-,DERIVED
+All KPI tiles,Calculated,see kpi_inventory.csv,(derived/v_aop_kpis),-,DERIVED
