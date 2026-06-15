@@ -315,21 +315,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const recordApproval = useCallback(
     (userId: string, action: ApprovalAction, comment: string) => {
+      const statusMap: Record<ApprovalAction, AopStatus> = {
+        submit: "submitted",
+        approve: "approved",
+        reject: "rejected",
+        request_changes: "changes_requested",
+      };
       setState((s) => {
         const existing = s.aops[userId] ?? defaultAop(userId);
-        const statusMap: Record<ApprovalAction, AopStatus> = {
-          submit: "submitted",
-          approve: "approved",
-          reject: "rejected",
-          request_changes: "changes_requested",
-        };
+        const nextStatus = statusMap[action];
         return {
           ...s,
           aops: {
             ...s.aops,
             [userId]: {
               ...existing,
-              status: statusMap[action],
+              status: nextStatus,
               updatedAt: new Date().toISOString(),
               approvals: [
                 ...existing.approvals,
@@ -344,6 +345,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               ],
             },
           },
+          auditLogs: [
+            {
+              id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              tableName: "aop_master",
+              recordId: existing.id,
+              action,
+              changedBy: s.currentUserId ?? userId,
+              diff: { status: nextStatus, userId },
+              createdAt: new Date().toISOString(),
+            },
+            ...s.auditLogs,
+          ].slice(0, 500),
         };
       });
     },

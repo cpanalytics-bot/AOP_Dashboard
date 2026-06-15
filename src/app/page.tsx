@@ -11,7 +11,10 @@ export default function ZdmDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      router.replace("/login");
+      return;
+    }
     if (currentUser.role === "ADMIN") router.replace("/admin");
     else if (currentUser.role === "BDM" || currentUser.role === "BDA") router.replace("/view");
   }, [currentUser, router]);

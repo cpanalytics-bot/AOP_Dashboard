@@ -228,9 +228,50 @@ export function computeAopKpis(aop: Aop): AopKpis {
   };
 }
 
-// ---- Collection (auto-calculated, fixed % per region/zone) ----
-// Collection % of the year's revenue target that should be realised as cash,
-// fixed by region. Milestones use a fixed cumulative phasing schedule.
+// ---- Collection (auto-calculated, region + month driven) ----
+// The cash collection plan is pre-fetched from a master table: for each
+// region we know the cumulative % of the year's revenue target that should
+// be realised as cash by each milestone month.
+//
+// The seed values below are stand-ins for that master table — the final
+// numbers will be loaded from the DB once the table is defined.
+
+export interface CollectionMilestone {
+  /** Display label for the milestone, e.g. "Till Dec 2026". */
+  label: string;
+  /** Cumulative % of the year's revenue target collected by this date (0-100). */
+  cumulativePct: number;
+}
+
+export const REGION_COLLECTION_PHASING: Record<string, CollectionMilestone[]> = {
+  North: [
+    { label: "Till Dec 2026", cumulativePct: 20 },
+    { label: "Till Feb 2027", cumulativePct: 40 },
+    { label: "Till May 2027", cumulativePct: 70 },
+  ],
+  West: [
+    { label: "Till Dec 2026", cumulativePct: 22 },
+    { label: "Till Feb 2027", cumulativePct: 45 },
+    { label: "Till May 2027", cumulativePct: 75 },
+  ],
+  South: [
+    { label: "Till Dec 2026", cumulativePct: 25 },
+    { label: "Till Feb 2027", cumulativePct: 50 },
+    { label: "Till May 2027", cumulativePct: 78 },
+  ],
+  East: [
+    { label: "Till Dec 2026", cumulativePct: 20 },
+    { label: "Till Feb 2027", cumulativePct: 42 },
+    { label: "Till May 2027", cumulativePct: 72 },
+  ],
+};
+
+export const DEFAULT_COLLECTION_PHASING: CollectionMilestone[] = [
+  { label: "Till Dec 2026", cumulativePct: 20 },
+  { label: "Till Feb 2027", cumulativePct: 40 },
+  { label: "Till May 2027", cumulativePct: 70 },
+];
+
 export const REGION_COLLECTION_PCT: Record<string, number> = {
   North: 85,
   West: 88,
@@ -239,39 +280,34 @@ export const REGION_COLLECTION_PCT: Record<string, number> = {
 };
 export const DEFAULT_COLLECTION_PCT = 85;
 
-// Cumulative share of the collection target due by each milestone (fixed).
-export const COLLECTION_PHASING = {
-  dec: 0.4,
-  march: 0.7,
-  april: 0.85,
-  june: 1.0,
-} as const;
-
 export function collectionPercentForZone(zone?: string): number {
   return (zone && REGION_COLLECTION_PCT[zone]) || DEFAULT_COLLECTION_PCT;
+}
+
+export function collectionPhasingForZone(zone?: string): CollectionMilestone[] {
+  return (zone && REGION_COLLECTION_PHASING[zone]) || DEFAULT_COLLECTION_PHASING;
 }
 
 export interface CollectionKpis {
   collectionPercent: number;
   totalCollectionTarget: number;
-  collectionByDec: number;
-  collectionByMarch: number;
-  collectionByApril: number;
-  collectionByJune: number;
+  milestones: { label: string; cumulativePct: number; amount: number }[];
 }
 
 export function computeCollection(
   totalRevenueTarget: number,
   collectionPercent: number,
+  phasing: CollectionMilestone[] = DEFAULT_COLLECTION_PHASING,
 ): CollectionKpis {
   const totalCollectionTarget = (totalRevenueTarget * collectionPercent) / 100;
   return {
     collectionPercent,
     totalCollectionTarget: round(totalCollectionTarget),
-    collectionByDec: round(totalCollectionTarget * COLLECTION_PHASING.dec),
-    collectionByMarch: round(totalCollectionTarget * COLLECTION_PHASING.march),
-    collectionByApril: round(totalCollectionTarget * COLLECTION_PHASING.april),
-    collectionByJune: round(totalCollectionTarget * COLLECTION_PHASING.june),
+    milestones: phasing.map((m) => ({
+      label: m.label,
+      cumulativePct: m.cumulativePct,
+      amount: round((totalRevenueTarget * m.cumulativePct) / 100),
+    })),
   };
 }
 
@@ -580,6 +616,43 @@ export function aggregateTeamAop(
     updatedAt: now,
     updatedByUserId: zdmUserId,
   };
+}
+
+// ---- AOP completion (heuristic across required signals per stage) ----
+// Counts the number of "intent signals" the user has populated. We keep the
+// signal list small and decision-relevant so the % moves meaningfully as a
+// user progresses, instead of needing every input filled.
+export function computeAopCompletion(aop: Aop): {
+  pct: number;
+  signals: { key: string; label: string; done: boolean }[];
+} {
+  const r = aop.revenue;
+  const u = aop.universe;
+  const s = aop.sampling;
+  const t = aop.training;
+  const inv = aop.investment;
+
+  const signals = [
+    { key: "rev_total", label: "Total revenue target", done: r.totalRevenueTarget > 0 },
+    { key: "rev_aov", label: "Target AOV", done: r.targetAov > 0 },
+    { key: "rev_split", label: "Category split", done:
+        r.earlyYearsTarget + r.mathScienceTarget + r.otherCategoriesTarget + r.stemTarget + r.panelTarget > 0,
+    },
+    { key: "uni_growth", label: "School growth plan", done: u.activeSchoolAdditionPlan + u.newSchoolAcquisitionPlan > 0 },
+    { key: "uni_retention", label: "Retention plan %", done: u.retentionPlan > 0 },
+    { key: "samp_users", label: "Sampling — user schools", done: s.userSchoolsSampling > 0 },
+    { key: "samp_nonusers", label: "Sampling — non-user schools", done: s.nonUserSchoolsSampling > 0 },
+    { key: "samp_conv", label: "Conversion assumptions", done: s.userSchoolConversion + s.nonUserSchoolConversion > 0 },
+    { key: "train_any", label: "Training plan", done:
+        t.userSchoolTrainings + t.nonUserSchoolTrainings + t.digitalTrainings + t.physicalTrainings + t.teacherWorkshops + t.principalWorkshops + t.stemWorkshops + t.productDemonstrations > 0,
+    },
+    { key: "cost_any", label: "Cost plan", done:
+        inv.samplingCost + inv.travelCost + inv.reimbursementCost + inv.eventCost + inv.giftCost + inv.todCost + inv.promotionalCost + inv.discountCost + inv.distributorSupportCost + inv.otherCost > 0,
+    },
+  ];
+
+  const done = signals.filter((sig) => sig.done).length;
+  return { pct: Math.round((done / signals.length) * 100), signals };
 }
 
 export function computeTeamDashboardMetrics(

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { AopStatus } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Light, minimal UI primitives with a deliberate type scale.
@@ -115,9 +116,13 @@ export function Button({
 export function Badge({
   children,
   tone = "slate",
+  icon,
+  ariaLabel,
 }: {
   children: React.ReactNode;
   tone?: "slate" | "green" | "amber" | "red" | "indigo" | "blue";
+  icon?: React.ReactNode;
+  ariaLabel?: string;
 }) {
   const tones: Record<string, string> = {
     slate: "bg-gray-100 text-gray-600 ring-gray-200",
@@ -129,8 +134,10 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}
+      aria-label={ariaLabel}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]}`}
     >
+      {icon && <span aria-hidden>{icon}</span>}
       {children}
     </span>
   );
@@ -187,8 +194,10 @@ export function AutoStat({
   );
 }
 
+// Important: `text-base` (16px) prevents iOS Safari from zooming on focus.
+// We restore the smaller visual `text-sm` on sm+ screens where zoom isn't an issue.
 const inputBase =
-  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500";
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm";
 
 export function NumberInput({
   value,
@@ -279,6 +288,75 @@ export function ProgressBar({ pct, tone = "indigo" }: { pct: number; tone?: stri
   );
 }
 
+export function EmptyState({
+  icon = "✦",
+  title,
+  description,
+  action,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+      <div
+        aria-hidden
+        className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-50 to-white text-2xl text-indigo-500 ring-1 ring-inset ring-indigo-100"
+      >
+        {icon}
+      </div>
+      <h3 className="t-card-heading">{title}</h3>
+      {description && <p className="t-caption mt-1 max-w-sm">{description}</p>}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
+export function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-gray-200 bg-gray-50 px-1.5 text-[10.5px] font-semibold text-gray-600 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+      {children}
+    </kbd>
+  );
+}
+
+/**
+ * Lightweight CSS-based confetti burst.
+ * Renders one full-screen overlay with N short-lived squares that fall + rotate.
+ * No external dep, auto-unmounts when `play` flips false.
+ */
+export function ConfettiBurst({ play }: { play: boolean }) {
+  if (!play) return null;
+  const colors = ["#4F46E5", "#10B981", "#F59E0B", "#EF4444", "#0EA5E9", "#A855F7"];
+  const pieces = Array.from({ length: 80 }, (_, i) => {
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.4;
+    const duration = 1.6 + Math.random() * 1.4;
+    const size = 6 + Math.round(Math.random() * 6);
+    const rot = Math.round(Math.random() * 360);
+    const color = colors[i % colors.length];
+    return (
+      <span
+        key={i}
+        aria-hidden
+        className="confetti-piece"
+        style={{
+          left: `${left}%`,
+          width: size,
+          height: size * 0.6,
+          background: color,
+          animationDelay: `${delay}s`,
+          animationDuration: `${duration}s`,
+          transform: `rotate(${rot}deg)`,
+        }}
+      />
+    );
+  });
+  return <div className="confetti-overlay" aria-hidden>{pieces}</div>;
+}
+
 export function Modal({
   open,
   onClose,
@@ -340,5 +418,33 @@ export function Modal({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AOP status — single source of truth for tone, icon, label, aria-label.
+// ---------------------------------------------------------------------------
+
+type StatusTone = "slate" | "amber" | "blue" | "green" | "red" | "indigo";
+
+export const aopStatusMeta: Record<
+  AopStatus,
+  { tone: StatusTone; icon: string; label: string; aria: string }
+> = {
+  not_started: { tone: "slate", icon: "○", label: "Not started", aria: "Status: not started" },
+  draft: { tone: "amber", icon: "◐", label: "Draft", aria: "Status: draft in progress" },
+  submitted: { tone: "blue", icon: "▲", label: "Submitted", aria: "Status: submitted, awaiting review" },
+  in_review: { tone: "blue", icon: "◆", label: "In review", aria: "Status: in review" },
+  changes_requested: { tone: "amber", icon: "⟳", label: "Changes requested", aria: "Status: changes requested" },
+  approved: { tone: "green", icon: "✓", label: "Approved", aria: "Status: approved" },
+  rejected: { tone: "red", icon: "✕", label: "Rejected", aria: "Status: rejected" },
+};
+
+export function StatusPill({ status }: { status: AopStatus }) {
+  const m = aopStatusMeta[status];
+  return (
+    <Badge tone={m.tone} icon={m.icon} ariaLabel={m.aria}>
+      {m.label}
+    </Badge>
   );
 }

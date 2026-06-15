@@ -8,22 +8,22 @@ import {
   Card,
   Field,
   NumberInput,
-  Select,
   Stat,
   TextArea,
-  TextInput,
 } from "@/components/ui";
 import {
+  collectionPhasingForZone,
   computeCollection,
   computeInvestmentKpis,
   computeRevenueKpis,
   computeSamplingKpis,
-  computeTrainingKpis,
   computeUniverseKpis,
   fmtINR,
   fmtNum,
   fmtPct,
 } from "@/lib/calc";
+import { zoneById } from "@/lib/master-data";
+import { useStore } from "@/lib/store";
 
 export type Patch = <K extends keyof Aop>(section: K, value: Partial<Aop[K]>) => void;
 
@@ -125,15 +125,12 @@ export function RevenueStage({ aop, patch, errors, readOnly }: StageProps) {
       </Card>
 
       <Card>
-        <h3 className="mb-4 t-card-heading">Order size & per-school value</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <h3 className="mb-1 t-card-heading">Average order value (AOV)</h3>
+        <p className="t-caption mb-4">The size of a typical order. Order size and per-school value are the same number tracked here.</p>
+        <div className="grid gap-5 sm:grid-cols-2">
           <ReadOnlyCard label="Current AOV" value={fmtINR(r.currentAov)} note="Average size of one order today." />
           <Field label="Target AOV" hint="INR" note="How big you want the average order to be. Pre-filled to today's level.">
             <NumberInput value={r.targetAov} onChange={(v) => set("targetAov", v)} disabled={readOnly} />
-          </Field>
-          <ReadOnlyCard label="Current revenue / school" value={fmtINR(r.currentRevenuePerSchool)} note="Money each school gives today." />
-          <Field label="Target revenue / school" hint="INR" note="Money you want from each school. Pre-filled to today's level.">
-            <NumberInput value={r.targetRevenuePerSchool} onChange={(v) => set("targetRevenuePerSchool", v)} disabled={readOnly} />
           </Field>
         </div>
       </Card>
@@ -173,20 +170,13 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
     <div className="space-y-4">
       <Card>
         <StageIntro>Describe the schools in your area: how many there are, how many already buy from us, and how many do not yet.</StageIntro>
-        <h3 className="mb-4 t-card-heading">Schools in your area today</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Total schools" note="Every school in your area.">
-            <NumberInput value={u.totalSchools} onChange={(v) => set("totalSchools", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Active schools" note="Schools you are currently working with.">
-            <NumberInput value={u.activeSchools} onChange={(v) => set("activeSchools", v)} disabled={readOnly} />
-          </Field>
-          <Field label="User schools" note="Schools that already buy our products.">
-            <NumberInput value={u.userSchools} onChange={(v) => set("userSchools", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Non-user schools" note="Schools that do not buy from us yet.">
-            <NumberInput value={u.nonUserSchools} onChange={(v) => set("nonUserSchools", v)} disabled={readOnly} />
-          </Field>
+        <h3 className="mb-1 t-card-heading">Schools in your area today</h3>
+        <p className="t-caption mb-4">Auto-fetched from the school master · read-only.</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ReadOnlyCard label="Total schools" value={fmtNum(u.totalSchools)} note="Every school in your area." />
+          <ReadOnlyCard label="Active schools" value={fmtNum(u.activeSchools)} note="Schools you are currently working with." />
+          <ReadOnlyCard label="User schools" value={fmtNum(u.userSchools)} note="Schools that already buy our products." />
+          <ReadOnlyCard label="Non-user schools" value={fmtNum(u.nonUserSchools)} note="Schools that do not buy from us yet." />
         </div>
       </Card>
 
@@ -239,31 +229,10 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
         </div>
       </Card>
 
-      <Card>
-        <h3 className="mb-1 t-card-heading">Distributors</h3>
-        <p className="t-caption mb-4">The partners who help deliver our products to schools.</p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Existing distributor" note="Name of the partner you work with today.">
-            <TextInput value={u.existingDistributor} onChange={(e) => set("existingDistributor", e.target.value)} disabled={readOnly} />
-          </Field>
-          <Field label="Need a new distributor?" note="Choose Yes if you need another partner.">
-            <Select
-              value={u.newDistributorRequired ? "yes" : "no"}
-              onChange={(e) => set("newDistributorRequired", e.target.value === "yes")}
-              disabled={readOnly}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </Select>
-          </Field>
-          <Field label="Large institutional opportunities" note="Number of big institutions (not normal schools) you can target.">
-            <NumberInput value={u.largeInstitutionalOpportunities} onChange={(v) => set("largeInstitutionalOpportunities", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Strategic distributor opportunity" note="One line on any special distributor chance.">
-            <TextArea value={u.strategicDistributorOpportunity} onChange={(e) => set("strategicDistributorOpportunity", e.target.value)} disabled={readOnly} />
-          </Field>
-        </div>
-      </Card>
+      {/*
+        Distributors block hidden by request — surface only large institutional opportunities
+        and the distributor opportunity note inside another card if needed in future.
+      */}
     </div>
   );
 }
@@ -324,7 +293,6 @@ export function SamplingStage({ aop, patch, readOnly }: StageProps) {
 // ---------------------------------------------------------------------------
 export function TrainingStage({ aop, patch, readOnly }: StageProps) {
   const t = aop.training;
-  const k = computeTrainingKpis(t, aop.universe);
   const set = (field: keyof typeof t, v: number) => patch("training", { [field]: v } as never);
 
   return (
@@ -344,25 +312,10 @@ export function TrainingStage({ aop, patch, readOnly }: StageProps) {
         </div>
       </Card>
 
-      <Card>
-        <h3 className="mb-4 t-card-heading">Assumptions</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Cost per training" hint="INR" note="What one session costs. Pre-filled."><NumberInput value={t.costPerTraining} onChange={(v) => set("costPerTraining", v)} disabled={readOnly} /></Field>
-          <Field label="Participants per training" note="People who attend one session. Pre-filled."><NumberInput value={t.participantsPerTraining} onChange={(v) => set("participantsPerTraining", v)} disabled={readOnly} /></Field>
-          <Field label="Expected revenue impact" hint="INR" note="Extra money you expect training to bring."><NumberInput value={t.expectedRevenueImpact} onChange={(v) => set("expectedRevenueImpact", v)} disabled={readOnly} /></Field>
-        </div>
-      </Card>
-
-      <Card>
-        <h3 className="mb-4 t-card-heading">Calculated for you</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <Stat label="Total trainings" value={fmtNum(k.totalTrainings)} sub="all added" />
-          <Stat label="Training cost" value={fmtINR(k.trainingCost)} sub="count × cost" />
-          <Stat label="Cost / school" value={fmtINR(k.costPerSchool)} />
-          <Stat label="Participants" value={fmtNum(k.totalParticipants)} />
-          <Stat label="Cost / participant" value={fmtINR(k.costPerParticipant)} />
-        </div>
-      </Card>
+      {/*
+        Assumptions card (cost per training, participants per training, expected revenue impact)
+        and the "Calculated for you" KPI strip have been hidden by request.
+      */}
     </div>
   );
 }
@@ -375,31 +328,61 @@ export function InvestmentStage({ aop, patch, readOnly }: StageProps) {
   const k = computeInvestmentKpis(inv, aop.revenue.totalRevenueTarget, aop.universe.activeSchools);
   const set = (field: keyof typeof inv, v: number) => patch("investment", { [field]: v } as never);
 
-  const fields: [keyof typeof inv, string, string][] = [
-    ["samplingCost", "Sampling cost", "Money spent giving free trials."],
-    ["reimbursementCost", "Reimbursement cost", "Money paid back to staff for expenses."],
-    ["travelCost", "Travel cost", "Money spent on travel."],
-    ["distributorSupportCost", "Distributor support cost", "Money to support distributor partners."],
-    ["eventCost", "Event cost", "Money spent on events and fairs."],
-    ["giftCost", "Gift cost", "Money spent on gifts for schools."],
-    ["todCost", "TOD cost", "Turnover discount given for big buyers."],
-    ["promotionalCost", "Promotional cost", "Money spent on promotions and ads."],
-    ["schemeCost", "Scheme cost", "Money spent on special offers/schemes."],
-    ["discountCost", "Discount cost", "Money given away as discounts."],
-    ["strategicAccountInvestment", "Strategic account spend", "Extra money for your most important schools."],
-    ["otherCost", "Other cost", "Anything else not listed above."],
+  type CostField = { key: keyof typeof inv; label: string; note: string };
+  const groups: { title: string; description: string; fields: CostField[] }[] = [
+    {
+      title: "Customer engagement",
+      description: "Money spent reaching schools, teachers and principals.",
+      fields: [
+        { key: "samplingCost", label: "Sampling cost", note: "Money spent giving free trials." },
+        { key: "eventCost", label: "Event cost", note: "Money spent on events and fairs." },
+        { key: "giftCost", label: "Gift cost", note: "Money spent on gifts for schools." },
+      ],
+    },
+    {
+      title: "Field operations",
+      description: "On-ground execution by the sales team.",
+      fields: [
+        { key: "travelCost", label: "Travel cost", note: "Money spent on travel." },
+        { key: "reimbursementCost", label: "Reimbursement cost", note: "Money paid back to staff for expenses." },
+      ],
+    },
+    {
+      title: "Trade incentives",
+      description: "Discounts and pricing levers used to win orders.",
+      fields: [
+        { key: "todCost", label: "TOD cost", note: "Turnover discount given for big buyers." },
+        { key: "discountCost", label: "Discount cost", note: "Money given away as discounts." },
+        { key: "promotionalCost", label: "Promotional cost", note: "Money spent on promotions and ads." },
+      ],
+    },
+    {
+      title: "Channel & other",
+      description: "Partner support and any uncategorised spend.",
+      fields: [
+        { key: "distributorSupportCost", label: "Distributor support cost", note: "Money to support distributor partners." },
+        { key: "otherCost", label: "Other cost", note: "Anything else not listed above." },
+      ],
+    },
   ];
 
   return (
     <div className="space-y-4">
       <Card>
         <StageIntro>List all the money you plan to spend to hit your target. Leave a box at 0 if you will not spend on it.</StageIntro>
-        <h3 className="mb-4 t-card-heading">Cost & budget (INR)</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {fields.map(([f, label, note]) => (
-            <Field key={f} label={label} note={note}>
-              <NumberInput value={inv[f]} onChange={(v) => set(f, v)} disabled={readOnly} />
-            </Field>
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <div key={g.title}>
+              <h3 className="t-card-heading">{g.title}</h3>
+              <p className="t-caption mb-3 mt-0.5">{g.description}</p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {g.fields.map((f) => (
+                  <Field key={f.key} label={f.label} hint="INR" note={f.note}>
+                    <NumberInput value={inv[f.key]} onChange={(v) => set(f.key, v)} disabled={readOnly} />
+                  </Field>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </Card>
@@ -419,31 +402,60 @@ export function InvestmentStage({ aop, patch, readOnly }: StageProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Stage 7: Collection (auto-calculated, fixed % per region)
+// Stage 7: Collection (auto-calculated, region + month driven)
 // ---------------------------------------------------------------------------
 export function CollectionStage({ aop }: { aop: Aop }) {
+  const { users } = useStore();
+  const owner = users.find((u) => u.id === aop.userId);
+  const zone = zoneById(owner?.zoneId ?? "");
+  const regionName = zone?.name;
+  const phasing = collectionPhasingForZone(regionName);
   const pct = aop.collection.collectionPercent;
   const target = aop.revenue.totalRevenueTarget;
-  const c = computeCollection(target, pct);
+  const c = computeCollection(target, pct, phasing);
 
   return (
     <div className="space-y-4">
       <Card>
         <StageIntro>
-          Collection means the cash you actually bring in from your sales. Your region collects{" "}
-          <span className="font-semibold text-gray-700">{pct}%</span> of the target, and these
-          dates are filled in for you automatically. Nothing to type here.
+          Collection means the cash you actually bring in from your sales.
+          The milestones below are pre-fetched for your region —
+          <span className="font-semibold text-gray-700">
+            {" "}{regionName ?? "your region"}
+          </span>{" "}— and update automatically when your revenue target changes. Nothing to type here.
         </StageIntro>
-        <h3 className="mb-4 t-card-heading">Cash collection plan</h3>
+        <h3 className="mb-1 t-card-heading">Cash collection plan</h3>
+        <p className="t-caption mb-4">Region · {regionName ?? "Unmapped"} · {phasing.length} milestones</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <AutoStat label="Collection %" value={`${pct}%`} note="Fixed for your region." />
-          <AutoStat label="Total to collect" value={fmtINR(c.totalCollectionTarget)} note={`${pct}% of ${fmtINR(target)} target.`} />
+          <AutoStat label="Region collection %" value={`${pct}%`} note="Annual collection share for this region." />
+          <AutoStat label="Revenue target" value={fmtINR(target)} note="From the Revenue step." />
+          <AutoStat label="Total to collect" value={fmtINR(c.totalCollectionTarget)} note={`${pct}% of revenue target.`} />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <AutoStat label="By December" value={fmtINR(c.collectionByDec)} note="40% of total collection." />
-          <AutoStat label="By March" value={fmtINR(c.collectionByMarch)} note="70% by now." />
-          <AutoStat label="By April" value={fmtINR(c.collectionByApril)} note="85% by now." />
-          <AutoStat label="By June" value={fmtINR(c.collectionByJune)} note="100% — all collected." />
+        <div className="mt-3">
+          <p className="t-overline mb-2">Milestone phasing</p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full min-w-[420px] text-left text-[13px]">
+              <thead className="bg-gray-50/80 text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 t-overline">Milestone</th>
+                  <th className="px-3 py-2 t-overline">Collection %</th>
+                  <th className="px-3 py-2 t-overline">Cumulative amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.milestones.map((m) => (
+                  <tr key={m.label} className="border-t border-gray-100">
+                    <td className="px-3 py-2 font-medium text-gray-900">{m.label}</td>
+                    <td className="px-3 py-2 tabular-nums text-gray-700">{m.cumulativePct}%</td>
+                    <td className="px-3 py-2 tabular-nums text-gray-900">{fmtINR(m.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11.5px] text-gray-400">
+            These percentages will be loaded from the region × month master table once it is published. Seed values are shown for now.
+          </p>
         </div>
         {target === 0 && (
           <p className="mt-3 text-[12px] text-amber-600">

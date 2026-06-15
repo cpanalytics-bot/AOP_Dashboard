@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, TextInput } from "@/components/ui";
 import {
   blockNamesForDistricts,
   blocksForDistricts,
+  districtById,
   districtNames,
   districts,
 } from "@/lib/master-data";
 import { useStore } from "@/lib/store";
-import type { User } from "@/lib/types";
 
 export function EmployeeProfile({ userId }: { userId: string }) {
   const { users, canEditProfile, updateUserProfile } = useStore();
@@ -20,8 +20,44 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   const [editing, setEditing] = useState(false);
   const [baseLocation, setBaseLocation] = useState(user?.baseLocation ?? "");
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>(user?.districtIds ?? []);
+  const [districtMenuOpen, setDistrictMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const blocks = useMemo(() => blocksForDistricts(selectedDistricts), [selectedDistricts]);
+  // States the user is mapped to (derived from their currently-assigned districts).
+  // The dropdown only offers districts in these states. If a user has no districts
+  // yet, fall back to showing all states so onboarding still works.
+  const mappedStates = useMemo(() => {
+    const set = new Set<string>();
+    (user?.districtIds ?? []).forEach((id) => {
+      const d = districtById(id);
+      if (d) set.add(d.state);
+    });
+    return set;
+  }, [user?.districtIds]);
+
+  const districtsByState = useMemo(() => {
+    const eligible = mappedStates.size
+      ? districts.filter((d) => mappedStates.has(d.state))
+      : districts;
+    const groups = new Map<string, typeof districts>();
+    eligible.forEach((d) => {
+      const arr = groups.get(d.state) ?? [];
+      arr.push(d);
+      groups.set(d.state, arr);
+    });
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [mappedStates]);
+
+  useEffect(() => {
+    if (!districtMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setDistrictMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [districtMenuOpen]);
 
   if (!user) return null;
 
@@ -31,6 +67,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
       districtIds: selectedDistricts,
     });
     setEditing(false);
+    setDistrictMenuOpen(false);
   };
 
   const toggleDistrict = (id: string) => {
@@ -41,6 +78,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
 
   const displayDistricts = editing ? selectedDistricts : user.districtIds;
   const displayBlocks = blocksForDistricts(displayDistricts);
+  const stateLabel = Array.from(mappedStates).sort().join(", ") || "All states";
 
   return (
     <Card className="mb-5">
@@ -62,7 +100,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
         )}
         {editing && (
           <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setDistrictMenuOpen(false); }}>Cancel</Button>
             <Button size="sm" onClick={save}>Save</Button>
           </div>
         )}
@@ -81,23 +119,59 @@ export function EmployeeProfile({ userId }: { userId: string }) {
       </dl>
 
       <div className="mt-4">
-        <p className="t-overline mb-2">Assigned districts</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="t-overline">Assigned districts</p>
+          {editing && (
+            <p className="t-caption">Scoped to: <span className="font-medium text-gray-700">{stateLabel}</span></p>
+          )}
+        </div>
         {editing ? (
-          <div className="flex flex-wrap gap-2">
-            {districts.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => toggleDistrict(d.id)}
-                className={`rounded-full border px-3 py-1 text-[12px] font-medium transition ${
-                  selectedDistricts.includes(d.id)
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {d.name}
-              </button>
-            ))}
+          <div ref={menuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setDistrictMenuOpen((o) => !o)}
+              className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <span className="truncate">
+                {selectedDistricts.length
+                  ? districtNames(selectedDistricts)
+                  : "Select districts…"}
+              </span>
+              <span className="ml-2 shrink-0 text-gray-400">
+                {selectedDistricts.length} selected · {districtMenuOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            {districtMenuOpen && (
+              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                {districtsByState.length === 0 && (
+                  <div className="p-3 text-[13px] text-gray-500">No districts available for your state mapping.</div>
+                )}
+                {districtsByState.map(([state, list]) => (
+                  <div key={state} className="border-b border-gray-100 last:border-0">
+                    <div className="bg-gray-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{state}</div>
+                    {list.map((d) => (
+                      <label
+                        key={d.id}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px] hover:bg-indigo-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedDistricts.includes(d.id)}
+                          onChange={() => toggleDistrict(d.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-gray-700">{d.name}</span>
+                        <span className="ml-auto text-[11px] text-gray-400">{d.code}</span>
+                      </label>
+                    ))}
+                  </div>
+                ))}
+                <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white px-3 py-2">
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedDistricts([])}>Clear</Button>
+                  <Button size="sm" onClick={() => setDistrictMenuOpen(false)}>Done</Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-[13px] text-gray-700">
