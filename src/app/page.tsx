@@ -7,17 +7,18 @@ import { TeamCommandCenter } from "@/components/TeamCommandCenter";
 import { useStore } from "@/lib/store";
 
 export default function ZdmDashboardPage() {
-  const { currentUser } = useStore();
+  const { currentUser, hydrating } = useStore();
   const router = useRouter();
 
   useEffect(() => {
+    if (hydrating) return;
     if (!currentUser) {
       router.replace("/login");
       return;
     }
     if (currentUser.role === "ADMIN") router.replace("/admin");
     else if (currentUser.role === "BDM" || currentUser.role === "BDA") router.replace("/view");
-  }, [currentUser, router]);
+  }, [currentUser, hydrating, router]);
 
   if (!currentUser || currentUser.role !== "ZDM") return null;
 

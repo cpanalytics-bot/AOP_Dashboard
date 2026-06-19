@@ -8,7 +8,7 @@ import { Badge, Button, Kbd } from "./ui";
 import { CommandPalette } from "./CommandPalette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { currentUser, logout } = useStore();
+  const { currentUser, logout, hydrating } = useStore();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -30,8 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser) router.replace("/login");
-  }, [currentUser, router]);
+    if (!hydrating && !currentUser) router.replace("/login");
+  }, [currentUser, hydrating, router]);
 
   if (!currentUser) return null;
 

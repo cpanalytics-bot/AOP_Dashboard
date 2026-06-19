@@ -18,10 +18,7 @@ import { EmployeeProfile } from "@/components/EmployeeProfile";
 import { districtNames } from "@/lib/master-data";
 import {
   CollectionStage,
-  InvestmentStage,
   RevenueStage,
-  SamplingStage,
-  TrainingStage,
   UniverseStage,
   type Patch,
 } from "./stages";
@@ -29,6 +26,7 @@ import type { Aop, AopStatus } from "@/lib/types";
 import {
   computeAopKpis,
   computeCollection,
+  computeUniverseKpis,
   flagUnrealisticTargets,
   fmtINR,
   fmtNum,
@@ -39,10 +37,7 @@ import { stageSchemas, type StageKey } from "@/lib/validation";
 const STAGES = [
   { key: "revenue", label: "Revenue" },
   { key: "universe", label: "Universe" },
-  { key: "sampling", label: "Sampling" },
-  { key: "training", label: "Training" },
-  { key: "investment", label: "Cost" },
-  { key: "collection", label: "Collection" },
+  { key: "collection", label: "Collections" },
   { key: "review", label: "Review" },
 ] as const;
 
@@ -53,52 +48,31 @@ const LOCKED: AopStatus[] = ["submitted", "in_review", "approved"];
 type StageStatus = "empty" | "in_progress" | "valid" | "invalid";
 
 function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
-  // Per-stage "untouched" signal: stage stays grey unless the user actually
-  // typed something. This stops the stepper flashing red on a fresh plan.
   const blank = (v: number) => !Number.isFinite(v);
   const untouchedByStage: Record<string, () => boolean> = {
     revenue: () => blank(aop.revenue.totalRevenueTarget),
     universe: () => aop.universe.categories.every((c) => blank(c.targetCount)),
-    sampling: () =>
-      [
-        aop.sampling.userSchoolsSampling,
-        aop.sampling.nonUserSchoolsSampling,
-        aop.sampling.testPrepSampling,
-        aop.sampling.earlyYearsSampling,
-        aop.sampling.msSampling,
-        aop.sampling.stemSampling,
-        aop.sampling.panelSampling,
-      ].every(blank),
-    training: () =>
-      [
-        aop.training.userSchoolTrainings,
-        aop.training.nonUserSchoolTrainings,
-        aop.training.digitalTrainings,
-        aop.training.physicalTrainings,
-        aop.training.teacherWorkshops,
-        aop.training.principalWorkshops,
-        aop.training.stemWorkshops,
-        aop.training.productDemonstrations,
-      ].every(blank),
-    investment: () => {
-      const i = aop.investment;
-      return [
-        i.samplingCost, i.reimbursementCost, i.travelCost, i.distributorSupportCost, i.eventCost,
-        i.giftCost, i.todCost, i.promotionalCost, i.discountCost, i.otherCost,
-      ].every(blank);
-    },
+    collection: () => aop.collection.milestoneRows.length === 0,
   };
 
-  const schemaKey = (["revenue", "universe", "sampling", "training", "investment"] as const).find(
-    (k) => k === key,
-  );
-  if (schemaKey) {
-    if (untouchedByStage[schemaKey]()) return "empty";
-    const data = (aop as unknown as Record<string, unknown>)[schemaKey];
-    const result = stageSchemas[schemaKey as StageKey].safeParse(data);
-    return result.success ? "valid" : "invalid";
+  // Map wizard keys to validation schema keys. Universe validates its own
+  // sub-schemas; sampling and training are embedded in the universe stage UI
+  // but validated separately.
+  const validatableKeys: Record<string, StageKey[]> = {
+    revenue: ["revenue"],
+    universe: ["universe", "sampling", "training"],
+    collection: ["collection"],
+  };
+
+  const schemaKeys = validatableKeys[key];
+  if (schemaKeys) {
+    if (untouchedByStage[key]?.()) return "empty";
+    const allValid = schemaKeys.every((sk) => {
+      const data = (aop as unknown as Record<string, unknown>)[sk];
+      return stageSchemas[sk].safeParse(data).success;
+    });
+    return allValid ? "valid" : "in_progress";
   }
-  if (key === "collection") return Number.isFinite(aop.revenue.totalRevenueTarget) ? "valid" : "empty";
   return "in_progress"; // review
 }
 
@@ -116,8 +90,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
     hydrating,
   } = useStore();
 
-  // The id arrives via the URL (an email). Decode it and resolve to the exact
-  // stored user id (case-insensitive) so a percent-encoded/case-drifted id still matches.
   const decodedId = (() => {
     try { return decodeURIComponent(rawEmployeeId); } catch { return rawEmployeeId; }
   })();
@@ -162,21 +134,32 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
   };
 
   const validateStageKey = (key: string): boolean => {
-    if (!(key in stageSchemas)) return true;
-    const result = stageSchemas[key as StageKey].safeParse(
-      (draft as unknown as Record<string, unknown>)[key],
-    );
-    if (result.success) {
-      setErrors({});
-      return true;
+    // Universe stage validates universe + sampling + training sub-schemas
+    const keysToValidate: StageKey[] =
+      key === "universe"
+        ? ["universe", "sampling", "training"]
+        : key in stageSchemas
+          ? [key as StageKey]
+          : [];
+
+    if (keysToValidate.length === 0) return true;
+
+    const allErrors: Record<string, string> = {};
+    let allValid = true;
+    for (const k of keysToValidate) {
+      const result = stageSchemas[k].safeParse(
+        (draft as unknown as Record<string, unknown>)[k],
+      );
+      if (!result.success) {
+        allValid = false;
+        result.error.issues.forEach((i) => {
+          const ek = i.path[i.path.length - 1]?.toString() ?? i.path.join(".");
+          if (!allErrors[ek]) allErrors[ek] = i.message;
+        });
+      }
     }
-    const e: Record<string, string> = {};
-    result.error.issues.forEach((i) => {
-      const k = i.path[i.path.length - 1]?.toString() ?? i.path.join(".");
-      if (!e[k]) e[k] = i.message;
-    });
-    setErrors(e);
-    return false;
+    setErrors(allValid ? {} : allErrors);
+    return allValid;
   };
 
   const goNext = () => {
@@ -192,10 +175,9 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Every mandatory field across the 5 input stages must be filled to submit.
   const mandatoryComplete = useMemo(
     () =>
-      (["revenue", "universe", "sampling", "training", "investment"] as const).every(
+      (["revenue", "universe", "sampling", "training", "collection"] as const).every(
         (k) => stageSchemas[k].safeParse((draft as unknown as Record<string, unknown>)[k]).success,
       ),
     [draft],
@@ -223,7 +205,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
   // ----- Keyboard shortcuts -----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Don't intercept inside inputs / textareas
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       const isField = tag === "input" || tag === "textarea" || tag === "select";
 
@@ -247,8 +228,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
   }, [step, readOnly, draft]);
 
   if (!target) {
-    // While the store is (re)hydrating from Supabase the roster may be empty —
-    // show a loader instead of a false "not found".
     if (hydrating || users.length === 0) {
       return <Card><p className="t-body">Loading…</p></Card>;
     }
@@ -352,16 +331,12 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
       <div className="min-h-[40vh]">
         {stageKey === "revenue" && (
           <div className="space-y-4">
-            <RevenueStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />
-            {/* Member profile (reporting manager, base location, email, districts, blocks) */}
             <EmployeeProfile userId={employeeId} />
+            <RevenueStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />
           </div>
         )}
         {stageKey === "universe" && <UniverseStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
-        {stageKey === "sampling" && <SamplingStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
-        {stageKey === "training" && <TrainingStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
-        {stageKey === "investment" && <InvestmentStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
-        {stageKey === "collection" && <CollectionStage aop={draft} />}
+        {stageKey === "collection" && <CollectionStage aop={draft} patch={patch} readOnly={readOnly} />}
         {stageKey === "review" && (
           <ReviewStage
             aop={draft}
@@ -458,8 +433,6 @@ function ReviewStage({
           <Stat label="School growth" value={fmtPct(kpis.schoolGrowthPct)} />
           <Stat label="Retention" value={fmtPct(kpis.retentionPct)} />
           <Stat label="Conversion" value={fmtPct(kpis.conversionPct)} />
-          <Stat label="Cost %" value={fmtPct(kpis.investmentPct)} tone={kpis.investmentPct > 25 ? "amber" : "green"} />
-          <Stat label="ROI" value={fmtPct(kpis.roiPct)} />
           <Stat label="Revenue / school" value={fmtINR(kpis.revenuePerSchool)} />
         </div>
       </Card>
@@ -490,56 +463,53 @@ function ReviewStage({
         <SummaryCard title="Revenue plan" onJump={() => jumpToStage("revenue")} rows={[
           ["Total target", fmtINR(aop.revenue.totalRevenueTarget)],
           ["Target AOV", fmtINR(aop.revenue.targetAov)],
-          ["Target rev/school", fmtINR(aop.revenue.targetRevenuePerSchool)],
+          ["Early Years", fmtINR(aop.revenue.earlyYearsTarget)],
+          ["Math & Science", fmtINR(aop.revenue.mathScienceTarget)],
+          ["Other categories", fmtINR(aop.revenue.otherCategoriesTarget)],
         ]} />
-        <SummaryCard title="Universe plan" onJump={() => jumpToStage("universe")} rows={[
-          ["Active schools", fmtNum(aop.universe.activeSchools)],
-          ["Bulk deals", fmtNum(aop.universe.bulkDealOpportunities)],
-          ["Retention %", fmtPct(aop.universe.retentionPlan)],
+        <SummaryCard title="Universe plan" onJump={() => jumpToStage("universe")} rows={(() => {
+          const uniKpis = computeUniverseKpis(aop.universe);
+          return [
+            ["Active schools", fmtNum(aop.universe.activeSchools)],
+            ["Retention count", fmtNum(aop.universe.retentionSchoolCount ?? 0) + " schools"],
+            ["Retention value", fmtINR(aop.universe.retentionPlanValue ?? 0)],
+            ["Sampling schools", fmtNum(uniKpis.totalSamplingFromCategories)],
+            ["Conversion schools", fmtNum(uniKpis.totalConversionFromCategories)],
+            ["Bulk deals", fmtNum(aop.universe.bulkDealOpportunities)],
+          ] as [string, string][];
+        })()} />
+        <SummaryCard title="Sampling plan" onJump={() => jumpToStage("universe")} rows={[
+          ["User schools", fmtNum(aop.sampling.userSchoolsSampling)],
+          ["Non-user schools", fmtNum(aop.sampling.nonUserSchoolsSampling)],
+          ["Test prep", fmtNum(aop.sampling.testPrepSampling)],
+          ["Early years", fmtNum(aop.sampling.earlyYearsSampling)],
+          ["Math & Science", fmtNum(aop.sampling.msSampling)],
+          ["STEM", fmtNum(aop.sampling.stemSampling)],
         ]} />
-        <SummaryCard title="Sampling plan" onJump={() => jumpToStage("sampling")} rows={[
-          ["User sampling", fmtNum(aop.sampling.userSchoolsSampling)],
-          ["Non-user sampling", fmtNum(aop.sampling.nonUserSchoolsSampling)],
-          ["Non-user conv value", fmtINR(aop.sampling.nonUserConversionValue)],
-        ]} />
-        <SummaryCard title="Training plan" onJump={() => jumpToStage("training")} rows={[
-          ["User trainings", fmtNum(aop.training.userSchoolTrainings)],
-          ["Workshops", fmtNum(aop.training.teacherWorkshops + aop.training.principalWorkshops)],
-          ["Total trainings", fmtNum(
+        <SummaryCard title="Training plan" onJump={() => jumpToStage("universe")} rows={[
+          ["User school trainings", fmtNum(aop.training.userSchoolTrainings)],
+          ["Non-user school trainings", fmtNum(aop.training.nonUserSchoolTrainings)],
+          ["Digital trainings", fmtNum(aop.training.digitalTrainings)],
+          ["Physical trainings", fmtNum(aop.training.physicalTrainings)],
+          ["Teacher workshops", fmtNum(aop.training.teacherWorkshops)],
+          ["Principal workshops", fmtNum(aop.training.principalWorkshops)],
+          ["STEM workshops", fmtNum(aop.training.stemWorkshops)],
+          ["Product demos", fmtNum(aop.training.productDemonstrations)],
+          ["Total", fmtNum(
             aop.training.userSchoolTrainings + aop.training.nonUserSchoolTrainings + aop.training.digitalTrainings +
             aop.training.physicalTrainings + aop.training.teacherWorkshops + aop.training.principalWorkshops +
             aop.training.stemWorkshops + aop.training.productDemonstrations)],
         ]} />
-        <SummaryCard title="Cost plan" onJump={() => jumpToStage("investment")} rows={[
-          ["Total cost", fmtINR(kpis.totalInvestment)],
-          ["Cost %", fmtPct(kpis.investmentPct)],
-          ["ROI", fmtPct(kpis.roiPct)],
-        ]} />
         <SummaryCard title="Collection plan" onJump={() => jumpToStage("collection")} rows={(() => {
           const c = computeCollection(aop.revenue.totalRevenueTarget, aop.collection.collectionPercent);
-          const rows: [string, string][] = [["Collection %", `${c.collectionPercent}%`]];
-          c.milestones.forEach((m) => rows.push([m.label, fmtINR(m.amount)]));
+          const rows: [string, string][] = [
+            ["Collection %", `${c.collectionPercent}%`],
+            ["Total to collect", fmtINR(c.totalCollectionTarget)],
+            ["Milestones", `${aop.collection.milestoneRows.length} rows`],
+          ];
           return rows;
         })()} />
-        <SummaryCard title="Approval history" rows={
-          aop.approvals.length
-            ? aop.approvals.map((a) => [a.action, new Date(a.createdAt).toLocaleDateString()] as [string, string])
-            : [["No events", "-"]]
-        } />
       </div>
-
-      {/* Actions */}
-      {isEditor && !locked && (
-        <Card>
-          <h3 className="mb-3 t-card-heading">Submit for approval</h3>
-          {hasBlockingErrors && (
-            <p className="mb-3 text-[13px] text-rose-600">Fill every required field across all stages and resolve any error flags before submitting.</p>
-          )}
-          <Button variant="success" onClick={onSubmit} disabled={hasBlockingErrors}>
-            Send for approval
-          </Button>
-        </Card>
-      )}
 
       {canReview && (
         <Card>

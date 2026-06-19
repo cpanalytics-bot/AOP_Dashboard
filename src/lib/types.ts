@@ -120,6 +120,8 @@ export interface SchoolCategoryPlan {
   category: string;
   currentCount: number;
   targetCount: number;
+  samplingCount: number;
+  conversionCount: number;
   projectedRevenue: number;
   projectedConversion: number;
 }
@@ -133,7 +135,8 @@ export interface UniversePlanning {
   activeSchoolAdditionPlan: number;
   newSchoolAcquisitionPlan: number;
   retentionPlan: number;
-  retentionPlanValue?: number; // INR amount the ZM commits to retain
+  retentionSchoolCount?: number;
+  retentionPlanValue?: number;
   keyAccountPlan: string;
   chainSchoolExpansionPlan: string;
   premiumSchoolStrategy: string;
@@ -191,8 +194,17 @@ export interface InvestmentPlanning {
   otherCost: number;
 }
 
+export interface CollectionMilestoneRow {
+  id: string;
+  month: string;
+  collectionPct: number;
+  collectionAmount: number;
+  cumulativeAmount: number;
+}
+
 export interface CollectionPlanning {
   collectionPercent: number;
+  milestoneRows: CollectionMilestoneRow[];
 }
 
 export interface ApprovalEvent {

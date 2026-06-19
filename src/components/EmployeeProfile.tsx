@@ -106,7 +106,8 @@ export function EmployeeProfile({ userId }: { userId: string }) {
         )}
       </div>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Identity + territory. Assigned districts sits directly below base location. */}
+      <dl className="mt-4 grid gap-x-5 gap-y-4 sm:grid-cols-2">
         <ProfileItem label="Reporting manager" value={manager?.name ?? "—"} />
         {editing ? (
           <Field label="Base location">
@@ -116,77 +117,85 @@ export function EmployeeProfile({ userId }: { userId: string }) {
           <ProfileItem label="Base location" value={user.baseLocation} />
         )}
         <ProfileItem label="Email" value={user.email} />
-      </dl>
 
-      <div className="mt-4">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="t-overline">Assigned districts</p>
-          {editing && (
-            <p className="t-caption">Scoped to: <span className="font-medium text-gray-700">{stateLabel}</span></p>
-          )}
-        </div>
-        {editing ? (
-          <div ref={menuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setDistrictMenuOpen((o) => !o)}
-              className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-            >
-              <span className="truncate">
-                {selectedDistricts.length
-                  ? districtNames(selectedDistricts)
-                  : "Select districts…"}
-              </span>
-              <span className="ml-2 shrink-0 text-gray-400">
-                {selectedDistricts.length} selected · {districtMenuOpen ? "▲" : "▼"}
-              </span>
-            </button>
-            {districtMenuOpen && (
-              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                {districtsByState.length === 0 && (
-                  <div className="p-3 text-[13px] text-gray-500">No districts available for your state mapping.</div>
-                )}
-                {districtsByState.map(([state, list]) => (
-                  <div key={state} className="border-b border-gray-100 last:border-0">
-                    <div className="bg-gray-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{state}</div>
-                    {list.map((d) => (
-                      <label
-                        key={d.id}
-                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px] hover:bg-indigo-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedDistricts.includes(d.id)}
-                          onChange={() => toggleDistrict(d.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700">{d.name}</span>
-                        <span className="ml-auto text-[11px] text-gray-400">{d.code}</span>
-                      </label>
-                    ))}
-                  </div>
-                ))}
-                <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white px-3 py-2">
-                  <Button size="sm" variant="ghost" onClick={() => setSelectedDistricts([])}>Clear</Button>
-                  <Button size="sm" onClick={() => setDistrictMenuOpen(false)}>Done</Button>
-                </div>
-              </div>
+        {/* Assigned districts — directly under base location */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="t-overline">Assigned districts</p>
+            {editing && (
+              <p className="t-caption">Scoped to: <span className="font-medium text-gray-700">{stateLabel}</span></p>
             )}
           </div>
-        ) : (
-          <p className="text-[13px] text-gray-700">
-            {districtNames(user.districtIds) || "No districts assigned"}
-          </p>
-        )}
-      </div>
+          {editing ? (
+            <div ref={menuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setDistrictMenuOpen((o) => !o)}
+                className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span className="truncate">
+                  {selectedDistricts.length
+                    ? districtNames(selectedDistricts)
+                    : "Select districts…"}
+                </span>
+                <span className="ml-2 shrink-0 text-gray-400">
+                  {selectedDistricts.length} selected · {districtMenuOpen ? "▲" : "▼"}
+                </span>
+              </button>
+              {districtMenuOpen && (
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                  {districtsByState.length === 0 && (
+                    <div className="p-3 text-[13px] text-gray-500">No districts available for your state mapping.</div>
+                  )}
+                  {districtsByState.map(([state, list]) => (
+                    <div key={state} className="border-b border-gray-100 last:border-0">
+                      <div className="bg-gray-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{state}</div>
+                      {list.map((d) => (
+                        <label
+                          key={d.id}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px] hover:bg-indigo-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedDistricts.includes(d.id)}
+                            onChange={() => toggleDistrict(d.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-gray-700">{d.name}</span>
+                          <span className="ml-auto text-[11px] text-gray-400">{d.code}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                  <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white px-3 py-2">
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedDistricts([])}>Clear</Button>
+                    <Button size="sm" onClick={() => setDistrictMenuOpen(false)}>Done</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-[13px] text-gray-700">
+              {districtNames(user.districtIds) || "No districts assigned"}
+            </p>
+          )}
+        </div>
+      </dl>
 
-      <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-        <p className="t-overline">Assigned blocks (auto from districts)</p>
-        <p className="mt-1 text-[13px] font-medium text-gray-900">
-          {displayBlocks.length} block{displayBlocks.length === 1 ? "" : "s"}
+      {/* Assigned blocks — left-aligned, consistent with the labels above */}
+      <div className="mt-4">
+        <p className="t-overline">
+          Assigned blocks <span className="font-normal normal-case tracking-normal text-gray-400">(auto from districts)</span>
         </p>
-        <p className="mt-0.5 text-[12px] text-gray-500">
-          {blockNamesForDistricts(displayDistricts) || "Select districts to load blocks"}
+        <p className="mt-1 text-[13px] text-gray-700">
+          <span className="font-medium text-gray-900">
+            {displayBlocks.length} block{displayBlocks.length === 1 ? "" : "s"}
+          </span>
+          {blockNamesForDistricts(displayDistricts) ? (
+            <span className="text-gray-500"> · {blockNamesForDistricts(displayDistricts)}</span>
+          ) : (
+            <span className="text-gray-400"> · Select districts to load blocks</span>
+          )}
         </p>
       </div>
     </Card>

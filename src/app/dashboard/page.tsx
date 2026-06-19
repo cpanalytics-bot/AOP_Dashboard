@@ -11,6 +11,7 @@ import {
   computeSamplingKpis,
   computeUniverseKpis,
   fmtINR,
+  fmtNum,
   fmtPct,
 } from "@/lib/calc";
 import type { User } from "@/lib/types";
@@ -85,8 +86,8 @@ function IndividualDashboard({ userId }: { userId: string }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Revenue growth" value={fmtPct(kpis.revenueGrowthPct)} tone={kpis.revenueGrowthPct >= 0 ? "green" : "red"} />
         <Stat label="School growth" value={fmtPct(uni.schoolGrowthPct)} />
-        <Stat label="Cost %" value={fmtPct(kpis.investmentPct)} />
-        <Stat label="ROI" value={fmtPct(kpis.roiPct)} />
+        <Stat label="Retention" value={fmtPct(kpis.retentionPct)} />
+        <Stat label="Conversion" value={fmtPct(kpis.conversionPct)} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -96,7 +97,7 @@ function IndividualDashboard({ userId }: { userId: string }) {
             <Row label="Active schools" value={String(aop.universe.activeSchools)} />
             <Row label="Target schools" value={String(uni.targetTotalFromCategories)} />
             <Row label="New acquisition plan" value={String(aop.universe.newSchoolAcquisitionPlan)} />
-            <Row label="Retention plan" value={`${aop.universe.retentionPlan}%`} />
+            <Row label="Retention schools" value={String(aop.universe.retentionPlanValue ?? 0)} />
           </div>
         </Card>
         <Card>
@@ -114,32 +115,45 @@ function IndividualDashboard({ userId }: { userId: string }) {
 }
 
 function TeamDashboard() {
-  const { currentUser, subordinates, getAop } = useStore();
+  const { currentUser, subordinates, getAop, hiring } = useStore();
   const team = useMemo(() => subordinates(currentUser!.id), [subordinates, currentUser]);
 
-  const rows = team.map((u) => {
+  const detailedRows = useMemo(() => team.map((u) => {
     const aop = getAop(u.id);
     const k = computeAopKpis(aop);
+    const uni = computeUniverseKpis(aop.universe);
     return {
       user: u,
+      aop,
       status: aop.status,
       target: aop.revenue.totalRevenueTarget,
+      targetAov: aop.revenue.targetAov,
       growth: k.revenueGrowthPct,
-      investmentPct: k.investmentPct,
+      retentionPct: k.retentionPct,
       achieved: ytdAchievementPct(u),
+      targetSchools: uni.targetTotalFromCategories,
+      samplingSchools: uni.totalSamplingFromCategories,
+      conversionSchools: uni.totalConversionFromCategories,
+      retentionCount: aop.universe.retentionSchoolCount ?? 0,
     };
-  });
+  }), [team, getAop]);
 
-  const totalTarget = rows.reduce((s, r) => s + r.target, 0);
-  const submitted = rows.filter((r) => ["submitted", "approved", "in_review"].includes(r.status)).length;
-  const approved = rows.filter((r) => r.status === "approved").length;
-  const atRisk = rows.filter((r) => r.achieved < 75).length;
+  const totalTarget = detailedRows.reduce((s, r) => s + r.target, 0);
+  const totalSchools = detailedRows.reduce((s, r) => s + r.targetSchools, 0);
+  const submitted = detailedRows.filter((r) => ["submitted", "approved", "in_review"].includes(r.status)).length;
+  const approved = detailedRows.filter((r) => r.status === "approved").length;
+  const atRisk = detailedRows.filter((r) => r.achieved < 75).length;
   const isZdm = currentUser?.role === "ZDM";
+
+  const teamIds = new Set(team.map((u) => u.id));
+  const totalHiring = (hiring ?? [])
+    .filter((h: { forUserId: string | null; numberOfPositions: number }) => h.forUserId && teamIds.has(h.forUserId))
+    .reduce((s: number, h: { numberOfPositions: number }) => s + h.numberOfPositions, 0);
 
   // Zone rollup grouped by reporting manager (for ZDM leadership view)
   const byManager = useMemo(() => {
     const map = new Map<string, { name: string; target: number; count: number }>();
-    rows.forEach((r) => {
+    detailedRows.forEach((r) => {
       const mgrId = r.user.reportingManagerId ?? "none";
       const cur = map.get(mgrId) ?? { name: r.user.reportingManagerId ?? "Direct", target: 0, count: 0 };
       cur.target += r.target;
@@ -147,14 +161,17 @@ function TeamDashboard() {
       map.set(mgrId, cur);
     });
     return Array.from(map.values());
-  }, [rows]);
+  }, [detailedRows]);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label="Team AOP target" value={fmtINR(totalTarget)} />
-        <Stat label="Plans submitted" value={`${submitted}/${rows.length}`} tone={submitted === rows.length ? "green" : "amber"} />
-        <Stat label="Approved" value={`${approved}/${rows.length}`} />
+      {/* ZM Roll-up stats */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <Stat label="Team revenue target" value={fmtINR(totalTarget)} />
+        <Stat label="Team schools target" value={fmtNum(totalSchools)} />
+        <Stat label="Hiring positions" value={String(totalHiring)} />
+        <Stat label="Plans submitted" value={`${submitted}/${detailedRows.length}`} tone={submitted === detailedRows.length ? "green" : "amber"} />
+        <Stat label="Approved" value={`${approved}/${detailedRows.length}`} />
         <Stat label="At risk (<75%)" value={String(atRisk)} tone={atRisk > 0 ? "red" : "green"} />
       </div>
 
@@ -176,7 +193,7 @@ function TeamDashboard() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {detailedRows.map((r) => (
                 <tr key={r.user.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2.5 pr-3 font-medium text-gray-900">{r.user.name}</td>
                   <td className="py-2.5 pr-3"><Badge tone={r.user.role === "BDM" ? "blue" : "slate"}>{r.user.role}</Badge></td>
@@ -189,8 +206,63 @@ function TeamDashboard() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {detailedRows.length === 0 && (
                 <tr><td colSpan={7} className="py-3 text-gray-400">No subordinates in your view.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* AOP Details Table — line-item visibility for ZM */}
+      <Card>
+        <h3 className="mb-4 t-card-heading">AOP Details by Member</h3>
+        <p className="t-caption mb-3">Consolidated view of all AOP line items filled by each team member.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-[12.5px]">
+            <thead className="bg-gray-50/80 text-gray-500">
+              <tr className="border-b border-gray-200">
+                <th className="t-overline py-2 px-2 font-semibold sticky left-0 bg-gray-50/80">Employee</th>
+                <th className="t-overline py-2 px-2 font-semibold">Revenue Target</th>
+                <th className="t-overline py-2 px-2 font-semibold">Target AOV</th>
+                <th className="t-overline py-2 px-2 font-semibold">Target Schools</th>
+                <th className="t-overline py-2 px-2 font-semibold">Retention</th>
+                <th className="t-overline py-2 px-2 font-semibold">Sampling</th>
+                <th className="t-overline py-2 px-2 font-semibold">Conversion</th>
+                <th className="t-overline py-2 px-2 font-semibold">Collection %</th>
+                <th className="t-overline py-2 px-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailedRows.map((r) => (
+                <tr key={r.user.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                  <td className="py-2 px-2 font-medium text-gray-900 sticky left-0 bg-white">
+                    <Link href={`/aop/${encodeURIComponent(r.user.id)}`} className="hover:text-indigo-600">{r.user.name}</Link>
+                  </td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.target)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.targetAov)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.targetSchools)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.retentionCount)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.samplingSchools)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.conversionSchools)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">{r.aop.collection.collectionPercent}%</td>
+                  <td className="py-2 px-2">
+                    <Badge tone={r.status === "approved" ? "green" : r.status === "submitted" ? "blue" : "slate"}>{r.status}</Badge>
+                  </td>
+                </tr>
+              ))}
+              {detailedRows.length > 0 && (
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                  <td className="py-2 px-2 text-gray-900 sticky left-0 bg-gray-50">Zone Total</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtINR(totalTarget)}</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(totalSchools)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.retentionCount, 0))}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.samplingSchools, 0))}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.conversionSchools, 0))}</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -216,7 +288,7 @@ function TeamDashboard() {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Stat label="Zone target" value={fmtINR(totalTarget)} />
-            <Stat label="Plan completion" value={fmtPct(rows.length ? (submitted / rows.length) * 100 : 0)} />
+            <Stat label="Plan completion" value={fmtPct(detailedRows.length ? (submitted / detailedRows.length) * 100 : 0)} />
             <Stat label="Revenue at risk" value={String(atRisk)} tone={atRisk > 0 ? "red" : "green"} sub="reports < 75% YTD" />
           </div>
         </Card>

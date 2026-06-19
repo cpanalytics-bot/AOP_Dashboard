@@ -45,13 +45,14 @@ export const categorySchema = z.object({
   category: z.string(),
   currentCount: auto,
   targetCount: reqNum,
-  projectedRevenue: auto, // auto-computed (target × conv% × AOV)
-  projectedConversion: reqPct,
+  samplingCount: reqNum,
+  conversionCount: reqNum,
+  projectedRevenue: auto,
+  projectedConversion: auto,
 });
 
 export const universeSchema = z.object({
   categories: z.array(categorySchema),
-  retentionPlan: reqPct,
   retentionPlanValue: reqNum,
   bulkDealOpportunities: reqNum,
 });
@@ -64,10 +65,6 @@ export const samplingSchema = z.object({
   msSampling: reqNum,
   stemSampling: reqNum,
   panelSampling: reqNum,
-  nonUserSchoolConversion: reqPct,
-  nonUserConversionValue: reqNum,
-  samplingToOrdersEstimate: reqNum,
-  samplingToNewSchoolsEstimate: reqNum,
 });
 
 export const trainingSchema = z.object({
@@ -81,17 +78,14 @@ export const trainingSchema = z.object({
   productDemonstrations: reqNum,
 });
 
-export const investmentSchema = z.object({
-  samplingCost: reqNum,
-  reimbursementCost: reqNum,
-  travelCost: reqNum,
-  distributorSupportCost: reqNum,
-  eventCost: reqNum,
-  giftCost: reqNum,
-  todCost: reqNum,
-  promotionalCost: reqNum,
-  discountCost: reqNum,
-  otherCost: reqNum,
+export const collectionSchema = z.object({
+  milestoneRows: z.array(z.object({
+    id: z.string(),
+    month: z.string().min(1, "Select a month"),
+    collectionPct: reqPct,
+    collectionAmount: auto,
+    cumulativeAmount: auto,
+  })),
 });
 
 export type StageKey =
@@ -99,14 +93,14 @@ export type StageKey =
   | "universe"
   | "sampling"
   | "training"
-  | "investment";
+  | "collection";
 
 export const stageSchemas: Record<StageKey, z.ZodTypeAny> = {
   revenue: revenueSchema,
   universe: universeSchema,
   sampling: samplingSchema,
   training: trainingSchema,
-  investment: investmentSchema,
+  collection: collectionSchema,
 };
 
 export function validateStage(stage: StageKey, data: unknown) {

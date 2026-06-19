@@ -58,21 +58,29 @@ export function computeRevenueKpis(r: RevenueTargets): RevenueKpis {
 export interface UniverseKpis {
   currentTotalFromCategories: number;
   targetTotalFromCategories: number;
+  totalSamplingFromCategories: number;
+  totalConversionFromCategories: number;
   schoolGrowthPct: number;
+  schoolGrowthCount: number;
   projectedCategoryRevenue: number;
   netNewSchools: number;
 }
 
 export function computeUniverseKpis(u: UniversePlanning): UniverseKpis {
-  const currentTotalFromCategories = u.categories.reduce((s, c) => s + c.currentCount, 0);
-  const targetTotalFromCategories = u.categories.reduce((s, c) => s + c.targetCount, 0);
-  const projectedCategoryRevenue = u.categories.reduce((s, c) => s + c.projectedRevenue, 0);
+  const currentTotalFromCategories = u.categories.reduce((s, c) => s + (Number.isFinite(c.currentCount) ? c.currentCount : 0), 0);
+  const targetTotalFromCategories = u.categories.reduce((s, c) => s + (Number.isFinite(c.targetCount) ? c.targetCount : 0), 0);
+  const totalSamplingFromCategories = u.categories.reduce((s, c) => s + (Number.isFinite(c.samplingCount) ? c.samplingCount : 0), 0);
+  const totalConversionFromCategories = u.categories.reduce((s, c) => s + (Number.isFinite(c.conversionCount) ? c.conversionCount : 0), 0);
+  const projectedCategoryRevenue = u.categories.reduce((s, c) => s + (Number.isFinite(c.projectedRevenue) ? c.projectedRevenue : 0), 0);
   return {
     currentTotalFromCategories,
     targetTotalFromCategories,
+    totalSamplingFromCategories,
+    totalConversionFromCategories,
     schoolGrowthPct: round(
       pct(targetTotalFromCategories - currentTotalFromCategories, currentTotalFromCategories),
     ),
+    schoolGrowthCount: targetTotalFromCategories - currentTotalFromCategories,
     projectedCategoryRevenue: round(projectedCategoryRevenue),
     netNewSchools: u.newSchoolAcquisitionPlan + u.activeSchoolAdditionPlan,
   };
@@ -194,36 +202,28 @@ export interface AopKpis {
   schoolGrowthPct: number;
   retentionPct: number;
   conversionPct: number;
-  investmentPct: number;
-  roiPct: number;
   revenuePerSchool: number;
-  totalInvestment: number;
   totalRevenueTarget: number;
 }
 
 export function computeAopKpis(aop: Aop): AopKpis {
   const rev = computeRevenueKpis(aop.revenue);
   const uni = computeUniverseKpis(aop.universe);
-  const samp = computeSamplingKpis(aop.sampling, aop.universe);
-  const invKpis = computeInvestmentKpis(
-    aop.investment,
-    aop.revenue.totalRevenueTarget,
-    aop.universe.activeSchools,
-  );
-  const blendedConversion =
-    (aop.sampling.userSchoolConversion + aop.sampling.nonUserSchoolConversion) / 2;
+  const retentionVal = Number.isFinite(aop.universe.retentionPlanValue) ? aop.universe.retentionPlanValue! : 0;
+  const activeSchools = Number.isFinite(aop.universe.activeSchools) ? aop.universe.activeSchools : 0;
+  const retentionPct = activeSchools > 0 ? round(pct(retentionVal, activeSchools)) : 0;
+  const conversionSchools = uni.totalConversionFromCategories;
+  const targetSchools = uni.targetTotalFromCategories;
+  const conversionPct = targetSchools > 0 ? round(pct(conversionSchools, targetSchools)) : 0;
   return {
     revenueGrowthPct: rev.revenueGrowthPct,
     aovGrowthPct: rev.aovGrowthPct,
     schoolGrowthPct: uni.schoolGrowthPct,
-    retentionPct: round(aop.universe.retentionPlan),
-    conversionPct: round(blendedConversion),
-    investmentPct: invKpis.investmentPctOfRevenue,
-    roiPct: round(invKpis.roiProjection * 100),
+    retentionPct,
+    conversionPct,
     revenuePerSchool: round(
-      safeDiv(aop.revenue.totalRevenueTarget, uni.targetTotalFromCategories || aop.universe.activeSchools),
+      safeDiv(aop.revenue.totalRevenueTarget, uni.targetTotalFromCategories || activeSchools),
     ),
-    totalInvestment: invKpis.totalInvestment,
     totalRevenueTarget: aop.revenue.totalRevenueTarget,
   };
 }
@@ -339,27 +339,18 @@ export function flagUnrealisticTargets(aop: Aop): TargetFlag[] {
       message: `Revenue target is below last year (${rev.revenueGrowthPct}%). Confirm this is intentional (e.g. territory split).`,
     });
   }
-  // Universe ceiling: target revenue per active+new school must be plausible vs AOV
-  const totalPlannedSchools =
-    aop.universe.activeSchools + aop.universe.newSchoolAcquisitionPlan;
-  const impliedRevPerSchool =
-    totalPlannedSchools > 0 ? aop.revenue.totalRevenueTarget / totalPlannedSchools : 0;
-  if (aop.revenue.targetAov > 0 && impliedRevPerSchool > aop.revenue.targetAov * 50) {
-    flags.push({
-      level: "warn",
-      message: `Implied revenue per school (${Math.round(impliedRevPerSchool).toLocaleString()}) is very high vs target AOV. Universe may be too small for this target.`,
-    });
+  const uni = computeUniverseKpis(aop.universe);
+  const targetSchools = uni.targetTotalFromCategories;
+  if (targetSchools > 0 && aop.revenue.targetAov > 0) {
+    const impliedRevPerSchool = aop.revenue.totalRevenueTarget / targetSchools;
+    if (impliedRevPerSchool > aop.revenue.targetAov * 50) {
+      flags.push({
+        level: "warn",
+        message: `Implied revenue per school (${Math.round(impliedRevPerSchool).toLocaleString()}) is very high vs target AOV. Universe may be too small for this target.`,
+      });
+    }
   }
   const samp = computeSamplingKpis(aop.sampling, aop.universe);
-  if (
-    aop.sampling.samplingToNewSchoolsEstimate >
-    aop.universe.nonUserSchools + 0.0001
-  ) {
-    flags.push({
-      level: "error",
-      message: `Sampling-to-new-schools estimate (${aop.sampling.samplingToNewSchoolsEstimate}) exceeds available non-user schools (${aop.universe.nonUserSchools}).`,
-    });
-  }
   if (samp.totalSamplingSchools === 0) {
     flags.push({ level: "info", message: "No sampling planned yet." });
   }
@@ -434,6 +425,8 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
       category,
       currentCount: 0,
       targetCount: 0,
+      samplingCount: 0,
+      conversionCount: 0,
       projectedRevenue: 0,
       projectedConversion: 0,
     }),
@@ -455,6 +448,8 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
       u.categories.forEach((c, i) => {
         cats[i].currentCount += c.currentCount;
         cats[i].targetCount += c.targetCount;
+        cats[i].samplingCount += (Number.isFinite(c.samplingCount) ? c.samplingCount : 0);
+        cats[i].conversionCount += (Number.isFinite(c.conversionCount) ? c.conversionCount : 0);
         cats[i].projectedRevenue += c.projectedRevenue;
         cats[i].projectedConversion += c.projectedConversion;
       });
@@ -608,7 +603,7 @@ export function aggregateTeamAop(
     sampling: sumSampling(teamAops),
     training: sumTraining(teamAops),
     investment: sumInvestment(teamAops),
-    collection: { collectionPercent: collectionPct },
+    collection: { collectionPercent: collectionPct, milestoneRows: [] },
     approvals: [],
     createdAt: now,
     updatedAt: now,
@@ -628,7 +623,6 @@ export function computeAopCompletion(aop: Aop): {
   const u = aop.universe;
   const s = aop.sampling;
   const t = aop.training;
-  const inv = aop.investment;
 
   const signals = [
     { key: "rev_total", label: "Total revenue target", done: r.totalRevenueTarget > 0 },
@@ -636,17 +630,14 @@ export function computeAopCompletion(aop: Aop): {
     { key: "rev_split", label: "Category split", done:
         r.earlyYearsTarget + r.mathScienceTarget + r.otherCategoriesTarget + r.stemTarget + r.panelTarget > 0,
     },
-    { key: "uni_growth", label: "School growth plan", done: u.activeSchoolAdditionPlan + u.newSchoolAcquisitionPlan > 0 },
-    { key: "uni_retention", label: "Retention plan %", done: u.retentionPlan > 0 },
+    { key: "uni_retention", label: "Retention school value", done: (u.retentionPlanValue ?? 0) > 0 },
+    { key: "uni_categories", label: "School type targets", done: u.categories.some((c) => Number.isFinite(c.targetCount) && c.targetCount > 0) },
     { key: "samp_users", label: "Sampling — user schools", done: s.userSchoolsSampling > 0 },
     { key: "samp_nonusers", label: "Sampling — non-user schools", done: s.nonUserSchoolsSampling > 0 },
-    { key: "samp_conv", label: "Conversion assumptions", done: s.userSchoolConversion + s.nonUserSchoolConversion > 0 },
     { key: "train_any", label: "Training plan", done:
         t.userSchoolTrainings + t.nonUserSchoolTrainings + t.digitalTrainings + t.physicalTrainings + t.teacherWorkshops + t.principalWorkshops + t.stemWorkshops + t.productDemonstrations > 0,
     },
-    { key: "cost_any", label: "Cost plan", done:
-        inv.samplingCost + inv.travelCost + inv.reimbursementCost + inv.eventCost + inv.giftCost + inv.todCost + inv.promotionalCost + inv.discountCost + inv.distributorSupportCost + inv.otherCost > 0,
-    },
+    { key: "collection", label: "Collection milestones", done: aop.collection.milestoneRows.length > 0 },
   ];
 
   const done = signals.filter((sig) => sig.done).length;
@@ -668,7 +659,7 @@ export function computeTeamDashboardMetrics(
   ).length;
   const totalRevenue = aops.reduce((s, a) => s + a.revenue.totalRevenueTarget, 0);
   const totalSchools = aops.reduce(
-    (s, a) => s + a.universe.categories.reduce((c, cat) => c + cat.targetCount, 0),
+    (s, a) => s + a.universe.categories.reduce((c, cat) => c + (cat.targetCount || 0), 0),
     0,
   );
   const teamIds = new Set(members.map((u) => u.id));

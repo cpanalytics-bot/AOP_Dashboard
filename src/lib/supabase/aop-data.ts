@@ -42,8 +42,10 @@ function buildCategories(
       category: cat,
       currentCount: current,
       targetCount: target,
+      samplingCount: NaN,
+      conversionCount: NaN,
       projectedConversion: conv,
-      projectedRevenue: Math.round(target * (conv / 100) * currentAov), // auto = target × conv% × AOV
+      projectedRevenue: Math.round(target * (conv / 100) * currentAov),
     };
   });
 }

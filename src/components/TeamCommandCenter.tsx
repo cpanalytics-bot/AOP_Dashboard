@@ -14,7 +14,9 @@ import {
   computeAopCompletion,
   computeAopKpis,
   computeTeamDashboardMetrics,
+  computeUniverseKpis,
   fmtINR,
+  fmtNum,
 } from "@/lib/calc";
 import { districtNames } from "@/lib/master-data";
 import { useStore } from "@/lib/store";
@@ -156,12 +158,13 @@ export function TeamCommandCenter({
     (r) => r.aop.status === "submitted" || r.aop.status === "in_review",
   );
   const notStarted = enriched.filter((r) => r.aop.status === "not_started");
-  const drafts = enriched.filter((r) => r.aop.status === "draft");
   const changesRequested = enriched.filter((r) => r.aop.status === "changes_requested");
   const atRisk = enriched.filter((r) => r.atRisk);
 
+  // Drafts are the ZM's own in-progress work, not an exception that needs a
+  // nudge — they surface in "All team" and the AOP Details table, not here.
   const actionCount =
-    awaitingApproval.length + notStarted.length + drafts.length + changesRequested.length + atRisk.length;
+    awaitingApproval.length + notStarted.length + changesRequested.length + atRisk.length;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -170,7 +173,7 @@ export function TeamCommandCenter({
   const visibleRows = enriched.filter((r) => {
     if (view === "all") return true;
     return (
-      ["submitted", "in_review", "draft", "not_started", "changes_requested"].includes(r.aop.status) ||
+      ["submitted", "in_review", "not_started", "changes_requested"].includes(r.aop.status) ||
       r.atRisk
     );
   });
@@ -334,16 +337,6 @@ export function TeamCommandCenter({
                 href={`/aop/${encodeURIComponent(notStarted[0].emp.id)}`}
               />
             )}
-            {drafts.length > 0 && (
-              <ActionRow
-                tone="amber"
-                icon="◐"
-                title={`${drafts.length} draft${drafts.length === 1 ? "" : "s"} in progress`}
-                sub="Encourage submission"
-                action="View"
-                href={`/aop/${encodeURIComponent(drafts[0].emp.id)}`}
-              />
-            )}
             {atRisk.length > 0 && (
               <ActionRow
                 tone="red"
@@ -371,7 +364,7 @@ export function TeamCommandCenter({
       {/* Context strip — quiet rollup numbers */}
       <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <ContextStat label="Revenue plan" value={fmtINR(metrics.totalRevenuePlanned)} />
-        <ContextStat label="Schools" value={String(metrics.totalSchoolsPlanned)} />
+        <ContextStat label="Schools" value={fmtNum(metrics.totalSchoolsPlanned || 0)} />
         <ContextStat label="Hiring" value={`${metrics.totalHiringPlanned}`} sub="positions" />
         <ContextStat label="Team" value={`${metrics.totalBdms} + ${metrics.totalBdas}`} sub="BDM + BDA" />
       </div>
@@ -424,6 +417,7 @@ export function TeamCommandCenter({
         </div>
       )}
 
+      {/* Action table — team roster (where the ZM takes action) */}
       <Card className="!p-0 overflow-x-auto">
         {visibleRows.length === 0 ? (
           view === "action" && actionCount === 0 ? (
@@ -482,6 +476,62 @@ export function TeamCommandCenter({
             </tbody>
           </table>
         )}
+      </Card>
+
+      {/* AOP Details Table — consolidated line items per member (below the action table) */}
+      <Card className="mt-4">
+        <h3 className="mb-3 text-[14px] font-semibold text-gray-900">AOP Details by Member</h3>
+        <p className="t-caption mb-3">Consolidated view of all AOP values filled by each team member. Revenue, schools, and hiring roll up as zone totals.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-[12.5px]">
+            <thead className="bg-gray-50/80 text-gray-500">
+              <tr className="border-b border-gray-200">
+                <th className="t-overline py-2 px-2 font-semibold">Employee</th>
+                <th className="t-overline py-2 px-2 font-semibold">Revenue Target</th>
+                <th className="t-overline py-2 px-2 font-semibold">Target AOV</th>
+                <th className="t-overline py-2 px-2 font-semibold">Target Schools</th>
+                <th className="t-overline py-2 px-2 font-semibold">Retention</th>
+                <th className="t-overline py-2 px-2 font-semibold">Sampling</th>
+                <th className="t-overline py-2 px-2 font-semibold">Conversion</th>
+                <th className="t-overline py-2 px-2 font-semibold">Collection %</th>
+                <th className="t-overline py-2 px-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enriched.map((r) => {
+                const uni = computeUniverseKpis(r.aop.universe);
+                return (
+                  <tr key={r.emp.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                    <td className="py-2 px-2 font-medium text-gray-900">
+                      <Link href={`/aop/${encodeURIComponent(r.emp.id)}`} className="hover:text-indigo-600">{r.emp.name}</Link>
+                    </td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.aop.revenue.totalRevenueTarget)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.aop.revenue.targetAov)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.targetTotalFromCategories)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.aop.universe.retentionSchoolCount ?? 0)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.totalSamplingFromCategories)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.totalConversionFromCategories)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">{r.aop.collection.collectionPercent}%</td>
+                    <td className="py-2 px-2"><StatusPill status={r.aop.status} /></td>
+                  </tr>
+                );
+              })}
+              {enriched.length > 0 && (
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                  <td className="py-2 px-2 text-gray-900">Zone Total</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtINR(metrics.totalRevenuePlanned)}</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(metrics.totalSchoolsPlanned)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + (r.aop.universe.retentionSchoolCount ?? 0), 0))}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + computeUniverseKpis(r.aop.universe).totalSamplingFromCategories, 0))}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + computeUniverseKpis(r.aop.universe).totalConversionFromCategories, 0))}</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                  <td className="py-2 px-2 text-gray-400">—</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
