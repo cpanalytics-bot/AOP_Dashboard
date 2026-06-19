@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { Badge, Button, Card, PageHeader, Spinner, StatusPill } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Segmented, Spinner, StatusPill } from "@/components/ui";
 import { fmtINR, fmtNum, fmtPct } from "@/lib/calc";
 import { liveAdminTargets, type AdminTargetRow } from "@/lib/supabase/aop-data";
 import { useStore } from "@/lib/store";
@@ -176,14 +176,7 @@ export default function TargetsPage() {
 
       {/* Tabs + controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-          {TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`min-h-[32px] rounded-md px-3.5 text-[13px] font-medium transition ${tab === t.key ? "bg-indigo-600 text-white" : "text-gray-500 hover:text-gray-900"}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <Segmented options={TABS.map((t) => ({ key: t.key, label: t.label }))} value={tab} onChange={setTab} />
         <div className="flex flex-wrap items-center gap-2">
           <select value={zmFilter} onChange={(e) => setZmFilter(e.target.value)}
             className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-indigo-500">

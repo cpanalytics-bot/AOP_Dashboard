@@ -11,6 +11,7 @@ import {
   Field,
   Modal,
   ProgressBar,
+  Segmented,
   Select,
   StatusPill,
   TextInput,
@@ -439,19 +440,11 @@ export function TeamCommandCenter({
             placeholder="Search…"
             className="h-9 w-44 rounded-lg border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
           />
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-            {(["ALL", "BDM", "BDA"] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`min-h-[32px] rounded-md px-2.5 text-[12px] font-medium ${
-                  roleFilter === r ? "bg-indigo-600 text-white" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            options={[{ key: "ALL", label: "All" }, { key: "BDM", label: "BDM" }, { key: "BDA", label: "BDA" }]}
+            value={roleFilter as "ALL" | "BDM" | "BDA"}
+            onChange={(v) => setRoleFilter(v)}
+          />
           {!readOnly && <Button size="sm" onClick={() => setAddOpen(true)}>+ Add member</Button>}
           <Button variant="outline" size="sm" onClick={downloadCsv}>Export</Button>
         </div>

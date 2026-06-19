@@ -332,6 +332,42 @@ export function KpiCard({
   );
 }
 
+/**
+ * Segmented "switch view" toggle — rounded track with a white active pill
+ * (matches the header nav style). Use for view switchers and small filters.
+ */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  className = "",
+}: {
+  options: { key: T; label: React.ReactNode }[];
+  value: T;
+  onChange: (key: T) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50/70 p-1 ${className}`}>
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          onClick={() => onChange(o.key)}
+          aria-pressed={value === o.key}
+          className={`min-h-[30px] rounded-lg px-3.5 text-[13px] font-medium transition-all ${
+            value === o.key
+              ? "bg-white text-indigo-700 shadow-sm ring-1 ring-inset ring-gray-200"
+              : "text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Inline spinner for buttons and loading overlays. */
 export function Spinner({ className = "" }: { className?: string }) {
   return (
