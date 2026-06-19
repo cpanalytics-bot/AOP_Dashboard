@@ -105,7 +105,7 @@ function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
   return "in_progress"; // hiring
 }
 
-export function Wizard({ employeeId }: { employeeId: string }) {
+export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
   const router = useRouter();
   const {
     currentUser,
@@ -119,7 +119,15 @@ export function Wizard({ employeeId }: { employeeId: string }) {
     hydrating,
   } = useStore();
 
-  const target = users.find((u) => u.id === employeeId);
+  // The id arrives via the URL (an email). Decode it and resolve to the exact
+  // stored user id (case-insensitive) so a percent-encoded/case-drifted id still matches.
+  const decodedId = (() => {
+    try { return decodeURIComponent(rawEmployeeId); } catch { return rawEmployeeId; }
+  })();
+  const target =
+    users.find((u) => u.id === decodedId) ??
+    users.find((u) => u.id.toLowerCase() === decodedId.toLowerCase());
+  const employeeId = target?.id ?? decodedId;
   const stored = getAop(employeeId);
   const [draft, setDraft] = useState<Aop>(stored);
   const [step, setStep] = useState(0);
