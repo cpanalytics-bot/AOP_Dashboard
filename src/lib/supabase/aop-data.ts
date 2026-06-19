@@ -15,6 +15,17 @@ const FY = "FY26-27";
 const sb = () => createClient();
 export const UNIVERSE_CATEGORIES = ["A", "B", "C", "D", "Uncategorized", "Chain"] as const;
 
+// DB null <-> blank (NaN) so a never-filled mandatory field stays blank on reload.
+const nz = (v: unknown): number => (v === null || v === undefined ? NaN : Number(v));
+function nullifyNaN<T extends Record<string, unknown>>(o: T): T {
+  const out: Record<string, unknown> = { ...o };
+  for (const k in out) {
+    const v = out[k];
+    if (typeof v === "number" && !Number.isFinite(v)) out[k] = null;
+  }
+  return out as T;
+}
+
 interface SavedCat { current_count: number; target_count: number; projected_conversion_pct: number }
 
 function buildCategories(
@@ -25,8 +36,8 @@ function buildCategories(
   return UNIVERSE_CATEGORIES.map((cat) => {
     const sv = saved.get(cat);
     const current = sv?.current_count ?? (cat === "Chain" ? snap?.chain ?? 0 : snapMap.get(cat) ?? 0);
-    const target = sv?.target_count ?? 0;
-    const conv = sv?.projected_conversion_pct ?? 0;
+    const target = sv ? sv.target_count : NaN;          // blank until entered
+    const conv = sv ? sv.projected_conversion_pct : NaN;
     return {
       category: cat,
       currentCount: current,
@@ -124,67 +135,66 @@ export async function ensureMaster(zmEmail: string): Promise<{ aopId: string; st
 // ---- Row <-> Aop section mappers ------------------------------------------
 
 function applyRevenue(aop: Aop, r: Record<string, number>) {
-  aop.revenue.lastYearRevenue = +r.last_year_revenue || 0;
-  aop.revenue.earlyYearsRevenueLY = +r.early_years_ly || 0;
-  aop.revenue.mathScienceRevenueLY = +r.math_science_ly || 0;
-  aop.revenue.otherCategoriesRevenueLY = +r.other_categories_ly || 0;
-  aop.revenue.currentAov = +r.current_aov || 0;
-  aop.revenue.totalRevenueTarget = +r.total_revenue_target || 0;
-  aop.revenue.earlyYearsTarget = +r.early_years_target || 0;
-  aop.revenue.mathScienceTarget = +r.math_science_target || 0;
-  aop.revenue.otherCategoriesTarget = +r.other_categories_target || 0;
-  aop.revenue.stemTarget = +r.stem_target || 0;
-  aop.revenue.panelTarget = +r.panel_target || 0;
-  aop.revenue.targetAov = +r.target_aov || 0;
+  aop.revenue.lastYearRevenue = nz(r.last_year_revenue);
+  aop.revenue.earlyYearsRevenueLY = nz(r.early_years_ly);
+  aop.revenue.mathScienceRevenueLY = nz(r.math_science_ly);
+  aop.revenue.otherCategoriesRevenueLY = nz(r.other_categories_ly);
+  aop.revenue.currentAov = nz(r.current_aov);
+  aop.revenue.totalRevenueTarget = nz(r.total_revenue_target);
+  aop.revenue.earlyYearsTarget = nz(r.early_years_target);
+  aop.revenue.mathScienceTarget = nz(r.math_science_target);
+  aop.revenue.otherCategoriesTarget = nz(r.other_categories_target);
+  aop.revenue.stemTarget = nz(r.stem_target);
+  aop.revenue.panelTarget = nz(r.panel_target);
+  aop.revenue.targetAov = nz(r.target_aov);
 }
 
 function applyUniverse(aop: Aop, u: Record<string, number>) {
-  aop.universe.totalSchools = +u.total_schools || 0;
-  aop.universe.activeSchools = +u.active_schools || 0;
-  aop.universe.userSchools = +u.user_schools || 0;
-  aop.universe.nonUserSchools = +u.non_user_schools || 0;
-  aop.universe.retentionPlan = +u.retention_plan_pct || 0;
-  aop.universe.retentionPlanValue = +u.retention_plan_value || 0;
-  aop.universe.bulkDealOpportunities = +u.bulk_deal_opportunities || 0;
+  aop.universe.totalSchools = nz(u.total_schools);
+  aop.universe.activeSchools = nz(u.active_schools);
+  aop.universe.userSchools = nz(u.user_schools);
+  aop.universe.nonUserSchools = nz(u.non_user_schools);
+  aop.universe.retentionPlan = nz(u.retention_plan_pct);
+  aop.universe.retentionPlanValue = nz(u.retention_plan_value);
+  aop.universe.bulkDealOpportunities = nz(u.bulk_deal_opportunities);
 }
 
 function applySampling(aop: Aop, s: Record<string, number>) {
-  aop.sampling.userSchoolsSampling = +s.user_schools_sampling || 0;
-  aop.sampling.nonUserSchoolsSampling = +s.non_user_schools_sampling || 0;
-  aop.sampling.testPrepSampling = +s.test_prep_sampling || 0;
-  aop.sampling.earlyYearsSampling = +s.early_years_sampling || 0;
-  aop.sampling.msSampling = +s.ms_sampling || 0;
-  aop.sampling.stemSampling = +s.stem_sampling || 0;
-  aop.sampling.panelSampling = +s.panel_sampling || 0;
-  aop.sampling.userSchoolConversion = +s.user_school_conversion_pct || 0;
-  aop.sampling.nonUserSchoolConversion = +s.non_user_school_conversion_pct || 0;
-  aop.sampling.samplingToRevenueEstimate = +s.sampling_to_revenue_estimate || 0;
-  aop.sampling.samplingToOrdersEstimate = +s.sampling_to_orders_estimate || 0;
-  aop.sampling.samplingToNewSchoolsEstimate = +s.sampling_to_new_schools_estimate || 0;
+  aop.sampling.userSchoolsSampling = nz(s.user_schools_sampling);
+  aop.sampling.nonUserSchoolsSampling = nz(s.non_user_schools_sampling);
+  aop.sampling.testPrepSampling = nz(s.test_prep_sampling);
+  aop.sampling.earlyYearsSampling = nz(s.early_years_sampling);
+  aop.sampling.msSampling = nz(s.ms_sampling);
+  aop.sampling.stemSampling = nz(s.stem_sampling);
+  aop.sampling.panelSampling = nz(s.panel_sampling);
+  aop.sampling.nonUserSchoolConversion = nz(s.non_user_school_conversion_pct);
+  aop.sampling.nonUserConversionValue = nz(s.non_user_conversion_value);
+  aop.sampling.samplingToOrdersEstimate = nz(s.sampling_to_orders_estimate);
+  aop.sampling.samplingToNewSchoolsEstimate = nz(s.sampling_to_new_schools_estimate);
 }
 
 function applyTraining(aop: Aop, t: Record<string, number>) {
-  aop.training.userSchoolTrainings = +t.user_school_trainings || 0;
-  aop.training.nonUserSchoolTrainings = +t.non_user_school_trainings || 0;
-  aop.training.digitalTrainings = +t.digital_trainings || 0;
-  aop.training.physicalTrainings = +t.physical_trainings || 0;
-  aop.training.teacherWorkshops = +t.teacher_workshops || 0;
-  aop.training.principalWorkshops = +t.principal_workshops || 0;
-  aop.training.stemWorkshops = +t.stem_workshops || 0;
-  aop.training.productDemonstrations = +t.product_demonstrations || 0;
+  aop.training.userSchoolTrainings = nz(t.user_school_trainings);
+  aop.training.nonUserSchoolTrainings = nz(t.non_user_school_trainings);
+  aop.training.digitalTrainings = nz(t.digital_trainings);
+  aop.training.physicalTrainings = nz(t.physical_trainings);
+  aop.training.teacherWorkshops = nz(t.teacher_workshops);
+  aop.training.principalWorkshops = nz(t.principal_workshops);
+  aop.training.stemWorkshops = nz(t.stem_workshops);
+  aop.training.productDemonstrations = nz(t.product_demonstrations);
 }
 
 function applyCost(aop: Aop, c: Record<string, number>) {
-  aop.investment.samplingCost = +c.sampling_cost || 0;
-  aop.investment.eventCost = +c.event_cost || 0;
-  aop.investment.giftCost = +c.gift_cost || 0;
-  aop.investment.travelCost = +c.travel_cost || 0;
-  aop.investment.reimbursementCost = +c.reimbursement_cost || 0;
-  aop.investment.todCost = +c.tod_cost || 0;
-  aop.investment.discountCost = +c.discount_cost || 0;
-  aop.investment.promotionalCost = +c.promotional_cost || 0;
-  aop.investment.distributorSupportCost = +c.distributor_support_cost || 0;
-  aop.investment.otherCost = +c.other_cost || 0;
+  aop.investment.samplingCost = nz(c.sampling_cost);
+  aop.investment.eventCost = nz(c.event_cost);
+  aop.investment.giftCost = nz(c.gift_cost);
+  aop.investment.travelCost = nz(c.travel_cost);
+  aop.investment.reimbursementCost = nz(c.reimbursement_cost);
+  aop.investment.todCost = nz(c.tod_cost);
+  aop.investment.discountCost = nz(c.discount_cost);
+  aop.investment.promotionalCost = nz(c.promotional_cost);
+  aop.investment.distributorSupportCost = nz(c.distributor_support_cost);
+  aop.investment.otherCost = nz(c.other_cost);
 }
 
 const revenueRow = (a: Aop) => ({
@@ -206,9 +216,8 @@ const samplingRow = (a: Aop) => ({
   user_schools_sampling: a.sampling.userSchoolsSampling, non_user_schools_sampling: a.sampling.nonUserSchoolsSampling,
   test_prep_sampling: a.sampling.testPrepSampling, early_years_sampling: a.sampling.earlyYearsSampling,
   ms_sampling: a.sampling.msSampling, stem_sampling: a.sampling.stemSampling, panel_sampling: a.sampling.panelSampling,
-  user_school_conversion_pct: a.sampling.userSchoolConversion,
   non_user_school_conversion_pct: a.sampling.nonUserSchoolConversion,
-  sampling_to_revenue_estimate: a.sampling.samplingToRevenueEstimate,
+  non_user_conversion_value: a.sampling.nonUserConversionValue,
   sampling_to_orders_estimate: a.sampling.samplingToOrdersEstimate,
   sampling_to_new_schools_estimate: a.sampling.samplingToNewSchoolsEstimate,
 });
@@ -293,8 +302,8 @@ export async function liveLoadBundle(
       const m = catByEmail.get(email) ?? new Map<string, SavedCat>();
       m.set(r.category as string, {
         current_count: Number(r.current_count) || 0,
-        target_count: Number(r.target_count) || 0,
-        projected_conversion_pct: Number(r.projected_conversion_pct) || 0,
+        target_count: nz(r.target_count),
+        projected_conversion_pct: nz(r.projected_conversion_pct),
       });
       catByEmail.set(email, m);
     });
@@ -335,18 +344,18 @@ export async function liveSaveAop(aopId: string, zmEmail: string, aop: Aop): Pro
 
   // Universe header first so we have its id for the category sub-rows.
   const { data: uniRow } = await c
-    .from("aop_universe").upsert({ ...keys, ...universeRow(aop) }, { onConflict })
+    .from("aop_universe").upsert(nullifyNaN({ ...keys, ...universeRow(aop) }), { onConflict })
     .select("unique_id").single();
   const universeId = (uniRow as { unique_id?: string } | null)?.unique_id;
 
   const tasks: PromiseLike<unknown>[] = [
-    c.from("aop_revenue").upsert({ ...keys, ...revenueRow(aop) }, { onConflict }),
-    c.from("aop_sampling_conversion").upsert({ ...keys, ...samplingRow(aop) }, { onConflict }),
-    c.from("aop_training").upsert({ ...keys, ...trainingRow(aop) }, { onConflict }),
-    c.from("aop_cost").upsert({ ...keys, ...costRow(aop) }, { onConflict }),
+    c.from("aop_revenue").upsert(nullifyNaN({ ...keys, ...revenueRow(aop) }), { onConflict }),
+    c.from("aop_sampling_conversion").upsert(nullifyNaN({ ...keys, ...samplingRow(aop) }), { onConflict }),
+    c.from("aop_training").upsert(nullifyNaN({ ...keys, ...trainingRow(aop) }), { onConflict }),
+    c.from("aop_cost").upsert(nullifyNaN({ ...keys, ...costRow(aop) }), { onConflict }),
     c.from("aop_collection").upsert(
-      { ...keys, collection_percent: aop.collection.collectionPercent || 80,
-        total_revenue_target: aop.revenue.totalRevenueTarget }, { onConflict }),
+      nullifyNaN({ ...keys, collection_percent: aop.collection.collectionPercent || 80,
+        total_revenue_target: aop.revenue.totalRevenueTarget }), { onConflict }),
     c.from("aop_member").upsert({ ...keys, is_filled: true }, { onConflict }),
   ];
 
@@ -354,7 +363,7 @@ export async function liveSaveAop(aopId: string, zmEmail: string, aop: Aop): Pro
     const valid = UNIVERSE_CATEGORIES as readonly string[];
     const catRows = aop.universe.categories
       .filter((cat) => valid.includes(cat.category))
-      .map((cat) => ({
+      .map((cat) => nullifyNaN({
         universe_id: universeId, employee_email: aop.userId, zm_email: zmEmail,
         category: cat.category, current_count: cat.currentCount, target_count: cat.targetCount,
         projected_conversion_pct: cat.projectedConversion, exp_revenue: cat.projectedRevenue,

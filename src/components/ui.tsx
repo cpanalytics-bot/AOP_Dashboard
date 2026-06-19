@@ -212,9 +212,12 @@ export function NumberInput({
       type="number"
       inputMode="decimal"
       className={inputBase}
-      value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+      // Blank (NaN) renders as an empty box; clearing the box reports NaN so the
+      // field reads as "not filled" for mandatory validation.
+      value={Number.isFinite(value) ? value : ""}
+      onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))}
       {...props}
+      placeholder={(props.placeholder as string) ?? "Enter value"}
     />
   );
 }

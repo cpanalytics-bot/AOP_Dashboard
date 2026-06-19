@@ -1,8 +1,13 @@
 import { z } from "zod";
 
-const nonNegative = z.number({ invalid_type_error: "Must be a number" }).min(0, "Must be >= 0");
-const positive = z.number({ invalid_type_error: "Must be a number" }).positive("Must be > 0");
-const percent = z.number().min(0, "Min 0%").max(100, "Max 100%");
+// Mandatory numeric: must be a real entered number (blank = NaN → fails).
+const reqNum = z.number().refine((v) => Number.isFinite(v), "Required");
+const reqPct = z
+  .number()
+  .refine((v) => Number.isFinite(v), "Required")
+  .refine((v) => v >= 0 && v <= 100, "Enter 0–100");
+// Lenient (auto/derived fields we don't force the user to fill).
+const auto = z.number().or(z.nan());
 
 export const hiringSchema = z.object({
   baseLocation: z.string().min(2, "Required"),
@@ -21,92 +26,72 @@ export const hiringSchema = z.object({
     "Strategic Account Requirement",
   ]),
   businessJustification: z.string().min(20, "Provide at least 20 characters of justification"),
-  expectedRevenueImpact: nonNegative,
+  expectedRevenueImpact: z.number().min(0, "Must be >= 0"),
   hiringTimeline: z.string().min(1, "Select a month"),
 });
 
+// All user-entered fields are mandatory.
 export const revenueSchema = z.object({
-  totalRevenueTarget: positive,
-  earlyYearsTarget: nonNegative,
-  mathScienceTarget: nonNegative,
-  otherCategoriesTarget: nonNegative,
-  stemTarget: nonNegative,
-  panelTarget: nonNegative,
-  targetAov: positive,
-  targetRevenuePerSchool: nonNegative,
+  totalRevenueTarget: reqNum,
+  earlyYearsTarget: reqNum,
+  mathScienceTarget: reqNum,
+  otherCategoriesTarget: reqNum,
+  stemTarget: reqNum,
+  panelTarget: reqNum,
+  targetAov: reqNum,
 });
 
 export const categorySchema = z.object({
   category: z.string(),
-  currentCount: nonNegative,
-  targetCount: nonNegative,
-  projectedRevenue: nonNegative,
-  projectedConversion: percent,
+  currentCount: auto,
+  targetCount: reqNum,
+  projectedRevenue: auto, // auto-computed (target × conv% × AOV)
+  projectedConversion: reqPct,
 });
 
 export const universeSchema = z.object({
-  totalSchools: nonNegative,
-  activeSchools: nonNegative,
-  userSchools: nonNegative,
-  nonUserSchools: nonNegative,
   categories: z.array(categorySchema),
-  activeSchoolAdditionPlan: nonNegative,
-  newSchoolAcquisitionPlan: nonNegative,
-  retentionPlan: percent,
-  keyAccountPlan: z.string(),
-  chainSchoolExpansionPlan: z.string(),
-  premiumSchoolStrategy: z.string(),
-  existingDistributor: z.string(),
-  newDistributorRequired: z.boolean(),
-  strategicDistributorOpportunity: z.string(),
-  bulkDealOpportunities: nonNegative,
-  largeInstitutionalOpportunities: nonNegative,
+  retentionPlan: reqPct,
+  retentionPlanValue: reqNum,
+  bulkDealOpportunities: reqNum,
 });
 
 export const samplingSchema = z.object({
-  userSchoolsSampling: nonNegative,
-  nonUserSchoolsSampling: nonNegative,
-  testPrepSampling: nonNegative,
-  earlyYearsSampling: nonNegative,
-  msSampling: nonNegative,
-  stemSampling: nonNegative,
-  panelSampling: nonNegative,
-  costPerSample: nonNegative,
-  userSchoolConversion: percent,
-  nonUserSchoolConversion: percent,
-  samplingToRevenueEstimate: nonNegative,
-  samplingToOrdersEstimate: nonNegative,
-  samplingToNewSchoolsEstimate: nonNegative,
-  uniqueSamplingFactor: z.number().min(0).max(1),
+  userSchoolsSampling: reqNum,
+  nonUserSchoolsSampling: reqNum,
+  testPrepSampling: reqNum,
+  earlyYearsSampling: reqNum,
+  msSampling: reqNum,
+  stemSampling: reqNum,
+  panelSampling: reqNum,
+  nonUserSchoolConversion: reqPct,
+  nonUserConversionValue: reqNum,
+  samplingToOrdersEstimate: reqNum,
+  samplingToNewSchoolsEstimate: reqNum,
 });
 
 export const trainingSchema = z.object({
-  userSchoolTrainings: nonNegative,
-  nonUserSchoolTrainings: nonNegative,
-  digitalTrainings: nonNegative,
-  physicalTrainings: nonNegative,
-  teacherWorkshops: nonNegative,
-  principalWorkshops: nonNegative,
-  stemWorkshops: nonNegative,
-  productDemonstrations: nonNegative,
-  costPerTraining: nonNegative,
-  participantsPerTraining: nonNegative,
-  expectedRevenueImpact: nonNegative,
+  userSchoolTrainings: reqNum,
+  nonUserSchoolTrainings: reqNum,
+  digitalTrainings: reqNum,
+  physicalTrainings: reqNum,
+  teacherWorkshops: reqNum,
+  principalWorkshops: reqNum,
+  stemWorkshops: reqNum,
+  productDemonstrations: reqNum,
 });
 
 export const investmentSchema = z.object({
-  samplingCost: nonNegative,
-  reimbursementCost: nonNegative,
-  travelCost: nonNegative,
-  distributorSupportCost: nonNegative,
-  eventCost: nonNegative,
-  giftCost: nonNegative,
-  todCost: nonNegative,
-  promotionalCost: nonNegative,
-  schemeCost: nonNegative,
-  discountCost: nonNegative,
-  strategicAccountInvestment: nonNegative,
-  otherCost: nonNegative,
+  samplingCost: reqNum,
+  reimbursementCost: reqNum,
+  travelCost: reqNum,
+  distributorSupportCost: reqNum,
+  eventCost: reqNum,
+  giftCost: reqNum,
+  todCost: reqNum,
+  promotionalCost: reqNum,
+  discountCost: reqNum,
+  otherCost: reqNum,
 });
 
 export type StageKey =

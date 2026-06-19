@@ -15,7 +15,6 @@ import {
   TextArea,
 } from "@/components/ui";
 import { EmployeeProfile } from "@/components/EmployeeProfile";
-import { HiringForm } from "@/components/HiringForm";
 import { districtNames } from "@/lib/master-data";
 import {
   CollectionStage,
@@ -32,12 +31,12 @@ import {
   computeCollection,
   flagUnrealisticTargets,
   fmtINR,
+  fmtNum,
   fmtPct,
 } from "@/lib/calc";
 import { stageSchemas, type StageKey } from "@/lib/validation";
 
 const STAGES = [
-  { key: "hiring", label: "Hiring" },
   { key: "revenue", label: "Revenue" },
   { key: "universe", label: "Universe" },
   { key: "sampling", label: "Sampling" },
@@ -56,38 +55,37 @@ type StageStatus = "empty" | "in_progress" | "valid" | "invalid";
 function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
   // Per-stage "untouched" signal: stage stays grey unless the user actually
   // typed something. This stops the stepper flashing red on a fresh plan.
+  const blank = (v: number) => !Number.isFinite(v);
   const untouchedByStage: Record<string, () => boolean> = {
-    revenue: () => aop.revenue.totalRevenueTarget === 0,
-    universe: () =>
-      aop.universe.activeSchoolAdditionPlan === 0 &&
-      aop.universe.newSchoolAcquisitionPlan === 0 &&
-      aop.universe.categories.every((c) => c.targetCount === c.currentCount && c.projectedRevenue === 0),
+    revenue: () => blank(aop.revenue.totalRevenueTarget),
+    universe: () => aop.universe.categories.every((c) => blank(c.targetCount)),
     sampling: () =>
-      aop.sampling.userSchoolsSampling +
-        aop.sampling.nonUserSchoolsSampling +
-        aop.sampling.testPrepSampling +
-        aop.sampling.earlyYearsSampling +
-        aop.sampling.msSampling +
-        aop.sampling.stemSampling +
-        aop.sampling.panelSampling ===
-      0,
+      [
+        aop.sampling.userSchoolsSampling,
+        aop.sampling.nonUserSchoolsSampling,
+        aop.sampling.testPrepSampling,
+        aop.sampling.earlyYearsSampling,
+        aop.sampling.msSampling,
+        aop.sampling.stemSampling,
+        aop.sampling.panelSampling,
+      ].every(blank),
     training: () =>
-      aop.training.userSchoolTrainings +
-        aop.training.nonUserSchoolTrainings +
-        aop.training.digitalTrainings +
-        aop.training.physicalTrainings +
-        aop.training.teacherWorkshops +
-        aop.training.principalWorkshops +
-        aop.training.stemWorkshops +
-        aop.training.productDemonstrations ===
-      0,
+      [
+        aop.training.userSchoolTrainings,
+        aop.training.nonUserSchoolTrainings,
+        aop.training.digitalTrainings,
+        aop.training.physicalTrainings,
+        aop.training.teacherWorkshops,
+        aop.training.principalWorkshops,
+        aop.training.stemWorkshops,
+        aop.training.productDemonstrations,
+      ].every(blank),
     investment: () => {
       const i = aop.investment;
-      return (
-        i.samplingCost + i.reimbursementCost + i.travelCost + i.distributorSupportCost + i.eventCost +
-          i.giftCost + i.todCost + i.promotionalCost + i.discountCost + i.otherCost ===
-        0
-      );
+      return [
+        i.samplingCost, i.reimbursementCost, i.travelCost, i.distributorSupportCost, i.eventCost,
+        i.giftCost, i.todCost, i.promotionalCost, i.discountCost, i.otherCost,
+      ].every(blank);
     },
   };
 
@@ -100,9 +98,8 @@ function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
     const result = stageSchemas[schemaKey as StageKey].safeParse(data);
     return result.success ? "valid" : "invalid";
   }
-  if (key === "collection") return aop.revenue.totalRevenueTarget > 0 ? "valid" : "empty";
-  if (key === "review") return "in_progress";
-  return "in_progress"; // hiring
+  if (key === "collection") return Number.isFinite(aop.revenue.totalRevenueTarget) ? "valid" : "empty";
+  return "in_progress"; // review
 }
 
 export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
@@ -133,7 +130,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [showHiringForm, setShowHiringForm] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
 
   const rollup = isRollupAop(employeeId) || !!draft.isRollup;
@@ -196,7 +192,15 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const hasBlockingErrors = flags.some((f) => f.level === "error");
+  // Every mandatory field across the 5 input stages must be filled to submit.
+  const mandatoryComplete = useMemo(
+    () =>
+      (["revenue", "universe", "sampling", "training", "investment"] as const).every(
+        (k) => stageSchemas[k].safeParse((draft as unknown as Record<string, unknown>)[k]).success,
+      ),
+    [draft],
+  );
+  const hasBlockingErrors = flags.some((f) => f.level === "error") || !mandatoryComplete;
 
   const submit = () => {
     if (hasBlockingErrors) return;
@@ -287,8 +291,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
         </div>
       </div>
 
-      {stageKey === "hiring" && <EmployeeProfile userId={employeeId} />}
-
       {rollup && (
         <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-2.5 text-[13px] text-indigo-800">
           This is your zone AOP — automatically calculated by adding up all your team members plans. You cannot edit it directly.
@@ -348,16 +350,13 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
 
       {/* Stage body */}
       <div className="min-h-[40vh]">
-        {stageKey === "hiring" && (
-          <HiringStage
-            employeeId={employeeId}
-            showForm={showHiringForm}
-            setShowForm={setShowHiringForm}
-            onApplyDefaults={!readOnly ? () => applySmartDefaults(draft, target.currentRevenue, (d) => setDraft(d)) : undefined}
-            draftStarted={draft.revenue.totalRevenueTarget > 0}
-          />
+        {stageKey === "revenue" && (
+          <div className="space-y-4">
+            <RevenueStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />
+            {/* Member profile (reporting manager, base location, email, districts, blocks) */}
+            <EmployeeProfile userId={employeeId} />
+          </div>
         )}
-        {stageKey === "revenue" && <RevenueStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
         {stageKey === "universe" && <UniverseStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
         {stageKey === "sampling" && <SamplingStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
         {stageKey === "training" && <TrainingStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />}
@@ -419,139 +418,6 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// Smart defaults helper — give the user a head-start when starting a plan from zero.
-function applySmartDefaults(draft: Aop, lastYearRevenue: number, setDraft: (a: Aop) => void) {
-  if (!lastYearRevenue) return;
-  const growth = 1.12; // sensible default ~12% YoY growth
-  const total = Math.round(lastYearRevenue * growth);
-
-  const lyParts = [
-    draft.revenue.earlyYearsRevenueLY,
-    draft.revenue.mathScienceRevenueLY,
-    draft.revenue.otherCategoriesRevenueLY,
-    draft.revenue.stemRevenueLY,
-    draft.revenue.panelRevenueLY,
-  ];
-  const lyTotal = lyParts.reduce((s, n) => s + n, 0) || 1;
-
-  setDraft({
-    ...draft,
-    revenue: {
-      ...draft.revenue,
-      totalRevenueTarget: total,
-      earlyYearsTarget: Math.round((total * lyParts[0]) / lyTotal),
-      mathScienceTarget: Math.round((total * lyParts[1]) / lyTotal),
-      otherCategoriesTarget: Math.round((total * lyParts[2]) / lyTotal),
-      stemTarget: Math.round((total * lyParts[3]) / lyTotal),
-      panelTarget: Math.round((total * lyParts[4]) / lyTotal),
-      targetAov: Math.round(draft.revenue.currentAov * growth),
-      targetRevenuePerSchool: Math.round(draft.revenue.currentRevenuePerSchool * growth),
-    },
-    universe: {
-      ...draft.universe,
-      activeSchoolAdditionPlan: draft.universe.activeSchoolAdditionPlan || 15,
-      newSchoolAcquisitionPlan: draft.universe.newSchoolAcquisitionPlan || 20,
-      retentionPlan: draft.universe.retentionPlan || 85,
-    },
-  });
-}
-
-function HiringStage({
-  employeeId,
-  showForm,
-  setShowForm,
-  onApplyDefaults,
-  draftStarted,
-}: {
-  employeeId: string;
-  showForm: boolean;
-  setShowForm: (v: boolean) => void;
-  onApplyDefaults?: () => void;
-  draftStarted: boolean;
-}) {
-  const { hiring, canRaiseHiring, users } = useStore();
-  const target = users.find((u) => u.id === employeeId);
-  const relevant = hiring.filter(
-    (h) =>
-      h.forUserId === employeeId ||
-      (h.forUserId === null && target && h.districtIds.some((id) => target.districtIds.includes(id))),
-  );
-
-  return (
-    <div className="space-y-4">
-      {onApplyDefaults && !draftStarted && (
-        <Card className="!border-indigo-200 !bg-gradient-to-br !from-indigo-50/70 !to-white">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="t-card-heading">Start with sensible defaults</h3>
-              <p className="t-caption mt-1 max-w-xl">
-                Pre-fill targets based on last year&apos;s revenue, mix, and a 12% growth assumption.
-                You can edit everything afterwards. Skips empty inputs across the whole plan.
-              </p>
-            </div>
-            <Button size="sm" onClick={onApplyDefaults}>Use defaults →</Button>
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="t-card-heading">Stage 1 · Hiring & manpower</h3>
-            <p className="t-caption mt-0.5">Identify manpower gaps before business planning.</p>
-          </div>
-          {canRaiseHiring() && (
-            <Button size="sm" onClick={() => setShowForm(!showForm)}>
-              {showForm ? "Close" : "+ Add request"}
-            </Button>
-          )}
-        </div>
-        {!canRaiseHiring() && (
-          <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13px] text-gray-500">
-            Hiring requests are raised by your ZDM.
-          </p>
-        )}
-      </Card>
-
-      {showForm && canRaiseHiring() && (
-        <HiringForm
-          onDone={() => setShowForm(false)}
-          forUserId={employeeId}
-          defaultDistrictIds={target?.districtIds ?? []}
-          defaultBaseLocation={target?.baseLocation ?? ""}
-        />
-      )}
-
-      <Card>
-        <h3 className="mb-4 t-card-heading">Requests ({relevant.length})</h3>
-        {relevant.length === 0 ? (
-          <p className="t-caption">No hiring requests yet.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {relevant.map((h) => (
-              <div key={h.id} className="rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-gray-900">
-                    {h.numberOfPositions} × {h.designation} · {districtNames(h.districtIds)}
-                  </span>
-                  <Badge tone={h.status === "Approved" ? "green" : h.status === "Closed" ? "slate" : "amber"}>
-                    {h.status}
-                  </Badge>
-                </div>
-                <div className="t-caption mt-1">
-                  {h.reason} · {h.priority} priority · by {h.hiringTimeline}
-                </div>
-                <p className="mt-1.5 text-[13px] text-gray-600">{h.businessJustification}</p>
-                <div className="t-caption mt-1.5">Expected impact: {fmtINR(h.expectedRevenueImpact)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
@@ -627,19 +493,22 @@ function ReviewStage({
           ["Target rev/school", fmtINR(aop.revenue.targetRevenuePerSchool)],
         ]} />
         <SummaryCard title="Universe plan" onJump={() => jumpToStage("universe")} rows={[
-          ["Active schools", String(aop.universe.activeSchools)],
-          ["New acquisition", String(aop.universe.newSchoolAcquisitionPlan)],
-          ["Retention %", `${aop.universe.retentionPlan}%`],
+          ["Active schools", fmtNum(aop.universe.activeSchools)],
+          ["Bulk deals", fmtNum(aop.universe.bulkDealOpportunities)],
+          ["Retention %", fmtPct(aop.universe.retentionPlan)],
         ]} />
         <SummaryCard title="Sampling plan" onJump={() => jumpToStage("sampling")} rows={[
-          ["User sampling", String(aop.sampling.userSchoolsSampling)],
-          ["Non-user sampling", String(aop.sampling.nonUserSchoolsSampling)],
-          ["Rev estimate", fmtINR(aop.sampling.samplingToRevenueEstimate)],
+          ["User sampling", fmtNum(aop.sampling.userSchoolsSampling)],
+          ["Non-user sampling", fmtNum(aop.sampling.nonUserSchoolsSampling)],
+          ["Non-user conv value", fmtINR(aop.sampling.nonUserConversionValue)],
         ]} />
         <SummaryCard title="Training plan" onJump={() => jumpToStage("training")} rows={[
-          ["User trainings", String(aop.training.userSchoolTrainings)],
-          ["Workshops", String(aop.training.teacherWorkshops + aop.training.principalWorkshops)],
-          ["Rev impact", fmtINR(aop.training.expectedRevenueImpact)],
+          ["User trainings", fmtNum(aop.training.userSchoolTrainings)],
+          ["Workshops", fmtNum(aop.training.teacherWorkshops + aop.training.principalWorkshops)],
+          ["Total trainings", fmtNum(
+            aop.training.userSchoolTrainings + aop.training.nonUserSchoolTrainings + aop.training.digitalTrainings +
+            aop.training.physicalTrainings + aop.training.teacherWorkshops + aop.training.principalWorkshops +
+            aop.training.stemWorkshops + aop.training.productDemonstrations)],
         ]} />
         <SummaryCard title="Cost plan" onJump={() => jumpToStage("investment")} rows={[
           ["Total cost", fmtINR(kpis.totalInvestment)],
@@ -664,7 +533,7 @@ function ReviewStage({
         <Card>
           <h3 className="mb-3 t-card-heading">Submit for approval</h3>
           {hasBlockingErrors && (
-            <p className="mb-3 text-[13px] text-rose-600">Resolve the error-level flags above before submitting.</p>
+            <p className="mb-3 text-[13px] text-rose-600">Fill every required field across all stages and resolve any error flags before submitting.</p>
           )}
           <Button variant="success" onClick={onSubmit} disabled={hasBlockingErrors}>
             Send for approval

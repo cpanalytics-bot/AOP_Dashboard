@@ -191,15 +191,15 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
         <p className="t-caption mb-4">For each type, how many you have now and how many you want by year-end.</p>
         <div className="space-y-2">
           <div className="hidden grid-cols-5 gap-2 px-1 sm:grid">
-            <span className="t-overline">Type</span><span className="t-overline">Now</span><span className="t-overline">Target</span><span className="t-overline">Exp. revenue</span><span className="t-overline">Exp. conv %</span>
+            <span className="t-overline">Type</span><span className="t-overline">Now</span><span className="t-overline">Target</span><span className="t-overline">Exp. conv %</span><span className="t-overline">Exp. revenue</span>
           </div>
           {u.categories.map((c, idx) => (
             <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-5">
               <div className="col-span-2 self-center text-[13px] font-medium text-gray-900 sm:col-span-1">{c.category}</div>
               <NumberInput value={c.currentCount} onChange={() => {}} disabled />
               <NumberInput value={c.targetCount} onChange={(v) => setCat(idx, "targetCount", v)} disabled={readOnly} />
-              <div className="self-center px-1 text-[13px] tabular-nums text-gray-700">{fmtINR(c.projectedRevenue)}</div>
               <NumberInput value={c.projectedConversion} onChange={(v) => setCat(idx, "projectedConversion", v)} disabled={readOnly} />
+              <div className="self-center px-1 text-[13px] tabular-nums text-gray-700">{fmtINR(c.projectedRevenue)}</div>
             </div>
           ))}
         </div>
@@ -255,17 +255,14 @@ export function SamplingStage({ aop, patch, readOnly }: StageProps) {
           <Field label="Math & Science" note="Samples for M&S products."><NumberInput value={s.msSampling} onChange={(v) => set("msSampling", v)} disabled={readOnly} /></Field>
           <Field label="STEM" note="Samples for STEM products."><NumberInput value={s.stemSampling} onChange={(v) => set("stemSampling", v)} disabled={readOnly} /></Field>
           <Field label="Panel" note="Samples for Panel products."><NumberInput value={s.panelSampling} onChange={(v) => set("panelSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Cost per sample" hint="INR" note="What one free trial costs us. Pre-filled, change if needed."><NumberInput value={s.costPerSample} onChange={(v) => set("costPerSample", v)} disabled={readOnly} /></Field>
-          <Field label="Unique factor (0-1)" note="Some schools get many samples. 0.7 = 70% are unique. Pre-filled."><NumberInput value={s.uniqueSamplingFactor} step="0.05" onChange={(v) => set("uniqueSamplingFactor", v)} disabled={readOnly} /></Field>
         </div>
       </Card>
 
       <Card>
         <h3 className="mb-4 t-card-heading">How many will start buying?</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="User school conversion %" note="Out of 100 existing buyers sampled, how many order again."><NumberInput value={s.userSchoolConversion} onChange={(v) => set("userSchoolConversion", v)} disabled={readOnly} /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Non-user conversion %" note="Out of 100 new schools sampled, how many start buying."><NumberInput value={s.nonUserSchoolConversion} onChange={(v) => set("nonUserSchoolConversion", v)} disabled={readOnly} /></Field>
-          <Field label="Revenue from sampling" hint="INR" note="Money you expect sampling to bring in."><NumberInput value={s.samplingToRevenueEstimate} onChange={(v) => set("samplingToRevenueEstimate", v)} disabled={readOnly} /></Field>
+          <Field label="Non-user conversion value" hint="INR" note="Revenue value expected from non-user conversions."><NumberInput value={s.nonUserConversionValue} onChange={(v) => set("nonUserConversionValue", v)} disabled={readOnly} /></Field>
           <Field label="Orders from sampling" note="Number of orders you expect from sampling."><NumberInput value={s.samplingToOrdersEstimate} onChange={(v) => set("samplingToOrdersEstimate", v)} disabled={readOnly} /></Field>
           <Field label="New schools from sampling" note="New schools you expect to win through sampling."><NumberInput value={s.samplingToNewSchoolsEstimate} onChange={(v) => set("samplingToNewSchoolsEstimate", v)} disabled={readOnly} /></Field>
         </div>
@@ -273,12 +270,8 @@ export function SamplingStage({ aop, patch, readOnly }: StageProps) {
 
       <Card>
         <h3 className="mb-4 t-card-heading">Calculated for you</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <Stat label="Total samples" value={fmtNum(k.totalSamplingSchools)} sub="all streams added" />
-          <Stat label="Unique schools" value={fmtNum(k.uniqueSamplingSchools)} sub="after dedup" />
-          <Stat label="Sampling cost" value={fmtINR(k.samplingCost)} sub="samples × cost" />
-          <Stat label="Cost / conversion" value={fmtINR(k.costPerConversion)} sub="cost to win one" />
-          <Stat label="Revenue / sample" value={fmtINR(k.revenuePerSample)} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Stat label="Total samples" value={fmtNum(k.totalSamplingSchools)} sub="all 7 streams added" />
         </div>
       </Card>
     </div>

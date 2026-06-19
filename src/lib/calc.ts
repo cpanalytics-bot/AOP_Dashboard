@@ -429,19 +429,15 @@ function sumRevenue(aops: Aop[]): RevenueTargets {
 }
 
 function sumUniverse(aops: Aop[]): UniversePlanning {
-  const cats: SchoolCategoryPlan[] = [
-    "Chain Schools",
-    "Premium Schools",
-    "Category A",
-    "Category B",
-    "Category C",
-  ].map((category) => ({
-    category: category as SchoolCategoryPlan["category"],
-    currentCount: 0,
-    targetCount: 0,
-    projectedRevenue: 0,
-    projectedConversion: 0,
-  }));
+  const cats: SchoolCategoryPlan[] = ["A", "B", "C", "D", "Uncategorized", "Chain"].map(
+    (category) => ({
+      category,
+      currentCount: 0,
+      targetCount: 0,
+      projectedRevenue: 0,
+      projectedConversion: 0,
+    }),
+  );
 
   let retentionSum = 0;
   const uni = aops.reduce(
@@ -507,6 +503,7 @@ function sumSampling(aops: Aop[]) {
       acc.samplingToRevenueEstimate += x.samplingToRevenueEstimate;
       acc.samplingToOrdersEstimate += x.samplingToOrdersEstimate;
       acc.samplingToNewSchoolsEstimate += x.samplingToNewSchoolsEstimate;
+      acc.nonUserConversionValue += x.nonUserConversionValue;
       userConv += x.userSchoolConversion;
       nonUserConv += x.nonUserSchoolConversion;
       return acc;
@@ -522,6 +519,7 @@ function sumSampling(aops: Aop[]) {
       costPerSample: aops[0]?.sampling.costPerSample ?? 1200,
       userSchoolConversion: 0,
       nonUserSchoolConversion: 0,
+      nonUserConversionValue: 0,
       samplingToRevenueEstimate: 0,
       samplingToOrdersEstimate: 0,
       samplingToNewSchoolsEstimate: 0,

@@ -155,6 +155,7 @@ export interface SamplingPlanning {
   costPerSample: number;
   userSchoolConversion: number;
   nonUserSchoolConversion: number;
+  nonUserConversionValue: number; // INR value entered next to non-user conversion %
   samplingToRevenueEstimate: number;
   samplingToOrdersEstimate: number;
   samplingToNewSchoolsEstimate: number;
