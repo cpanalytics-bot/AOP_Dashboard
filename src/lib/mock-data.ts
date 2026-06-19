@@ -1,6 +1,5 @@
 import type { Aop, HiringRequest, User } from "./types";
 import { FY } from "./types";
-import { zoneById } from "./master-data";
 
 // ---------------------------------------------------------------------------
 // Seed data used in MOCK mode (no Supabase configured).
@@ -147,8 +146,6 @@ export const users: User[] = [
 export function defaultAop(userId: string): Aop {
   const u = users.find((x) => x.id === userId)!;
   const lastYear = u?.currentRevenue ?? 0;
-  const zone = zoneById(u?.zoneId ?? "");
-  const collectionPct = zone?.collectionPercent ?? 85;
   const now = new Date().toISOString();
   return {
     id: `aop-${userId}`,
@@ -182,16 +179,17 @@ export function defaultAop(userId: string): Aop {
       userSchools: NaN,
       nonUserSchools: NaN,
       categories: [
-        { category: "A", currentCount: 30, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "B", currentCount: 28, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "C", currentCount: 22, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "D", currentCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "Uncategorized", currentCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "Chain", currentCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "A", currentCount: 30, activeCount: 26, userCount: 12, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "B", currentCount: 28, activeCount: 22, userCount: 9, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "C", currentCount: 22, activeCount: 15, userCount: 5, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "D", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "Uncategorized", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "Chain", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
       ],
       activeSchoolAdditionPlan: 0,
       newSchoolAcquisitionPlan: 0,
       retentionPlan: NaN,
+      retentionSchoolCount: NaN,
       retentionPlanValue: NaN,
       keyAccountPlan: "",
       chainSchoolExpansionPlan: "",
@@ -246,7 +244,7 @@ export function defaultAop(userId: string): Aop {
       strategicAccountInvestment: 0,
       otherCost: NaN,
     },
-    collection: { collectionPercent: collectionPct, milestoneRows: [] },
+    collection: { milestoneRows: [] },
     approvals: [],
     createdAt: now,
     updatedAt: now,

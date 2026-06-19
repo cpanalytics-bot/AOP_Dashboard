@@ -4,7 +4,6 @@
 // All currency values are in INR. Percentages returned as 0-100 numbers.
 // ---------------------------------------------------------------------------
 
-import { zoneById } from "./master-data";
 import type {
   Aop,
   AopStatus,
@@ -22,6 +21,8 @@ import { FY } from "./types";
 
 const safeDiv = (a: number, b: number) => (b ? a / b : 0);
 const pct = (part: number, whole: number) => (whole ? (part / whole) * 100 : 0);
+// Treat blank (NaN) as 0 when summing — lets optional fields stay empty.
+const fin = (n: number) => (Number.isFinite(n) ? n : 0);
 const round = (n: number, d = 2) => {
   const f = 10 ** d;
   return Math.round((n + Number.EPSILON) * f) / f;
@@ -37,20 +38,21 @@ export interface RevenueKpis {
 }
 
 export function computeRevenueKpis(r: RevenueTargets): RevenueKpis {
+  // Total revenue target = Early Years + Math & Science + Other Books ONLY.
+  // STEM and Panel are optional ADD-ONS, over and above the total — never part
+  // of the category-sum balance check.
   const categorySumTarget =
-    r.earlyYearsTarget +
-    r.mathScienceTarget +
-    r.otherCategoriesTarget +
-    r.stemTarget +
-    r.panelTarget;
+    fin(r.earlyYearsTarget) +
+    fin(r.mathScienceTarget) +
+    fin(r.otherCategoriesTarget);
   return {
-    revenueGrowthPct: round(pct(r.totalRevenueTarget - r.lastYearRevenue, r.lastYearRevenue)),
-    aovGrowthPct: round(pct(r.targetAov - r.currentAov, r.currentAov)),
+    revenueGrowthPct: round(pct(fin(r.totalRevenueTarget) - fin(r.lastYearRevenue), fin(r.lastYearRevenue))),
+    aovGrowthPct: round(pct(fin(r.targetAov) - fin(r.currentAov), fin(r.currentAov))),
     revenuePerSchoolGrowthPct: round(
-      pct(r.targetRevenuePerSchool - r.currentRevenuePerSchool, r.currentRevenuePerSchool),
+      pct(fin(r.targetRevenuePerSchool) - fin(r.currentRevenuePerSchool), fin(r.currentRevenuePerSchool)),
     ),
     categorySumTarget: round(categorySumTarget),
-    categoryMismatch: round(r.totalRevenueTarget - categorySumTarget),
+    categoryMismatch: round(fin(r.totalRevenueTarget) - categorySumTarget),
   };
 }
 
@@ -272,43 +274,54 @@ export const DEFAULT_COLLECTION_PHASING: CollectionMilestone[] = [
   { label: "Till May 2027", cumulativePct: 70 },
 ];
 
-export const REGION_COLLECTION_PCT: Record<string, number> = {
-  North: 85,
-  West: 88,
-  South: 90,
-  East: 86,
-};
-export const DEFAULT_COLLECTION_PCT = 85;
-
-export function collectionPercentForZone(zone?: string): number {
-  return (zone && REGION_COLLECTION_PCT[zone]) || DEFAULT_COLLECTION_PCT;
-}
-
 export function collectionPhasingForZone(zone?: string): CollectionMilestone[] {
   return (zone && REGION_COLLECTION_PHASING[zone]) || DEFAULT_COLLECTION_PHASING;
 }
 
 export interface CollectionKpis {
-  collectionPercent: number;
   totalCollectionTarget: number;
-  milestones: { label: string; cumulativePct: number; amount: number }[];
+  // Each milestone: cumulative % of the revenue target to be collected by that
+  // date, the cumulative INR by then, and the incremental INR for that period.
+  milestones: { label: string; cumulativePct: number; amount: number; incremental: number }[];
 }
 
+// Collection target = the FULL revenue target (no region % haircut). Milestones
+// phase WHEN that cash lands, cumulatively, using the region timing curve.
 export function computeCollection(
   totalRevenueTarget: number,
-  collectionPercent: number,
   phasing: CollectionMilestone[] = DEFAULT_COLLECTION_PHASING,
 ): CollectionKpis {
-  const totalCollectionTarget = (totalRevenueTarget * collectionPercent) / 100;
+  const base = fin(totalRevenueTarget);
+  let prevCumulative = 0;
   return {
-    collectionPercent,
-    totalCollectionTarget: round(totalCollectionTarget),
-    milestones: phasing.map((m) => ({
-      label: m.label,
-      cumulativePct: m.cumulativePct,
-      amount: round((totalRevenueTarget * m.cumulativePct) / 100),
-    })),
+    totalCollectionTarget: round(base),
+    milestones: phasing.map((m) => {
+      const amount = round((base * m.cumulativePct) / 100);
+      const incremental = round(amount - prevCumulative);
+      prevCumulative = amount;
+      return { label: m.label, cumulativePct: m.cumulativePct, amount, incremental };
+    }),
   };
+}
+
+// Build the persisted milestone rows (auto) from the region phasing × target.
+export function buildCollectionRows(
+  totalRevenueTarget: number,
+  phasing: CollectionMilestone[] = DEFAULT_COLLECTION_PHASING,
+): import("./types").CollectionMilestoneRow[] {
+  const { milestones } = computeCollection(totalRevenueTarget, phasing);
+  let prevPct = 0;
+  return milestones.map((m, i) => {
+    const incrementalPct = round(m.cumulativePct - prevPct);
+    prevPct = m.cumulativePct;
+    return {
+      id: `cm-${i}`,
+      month: m.label,
+      collectionPct: incrementalPct,
+      collectionAmount: m.incremental,
+      cumulativeAmount: m.amount,
+    };
+  });
 }
 
 // ---- Validation: unrealistic target flagging ----
@@ -424,6 +437,8 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
     (category) => ({
       category,
       currentCount: 0,
+      activeCount: 0,
+      userCount: 0,
       targetCount: 0,
       samplingCount: 0,
       conversionCount: 0,
@@ -446,7 +461,9 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
       acc.bulkDealOpportunities += u.bulkDealOpportunities;
       acc.largeInstitutionalOpportunities += u.largeInstitutionalOpportunities;
       u.categories.forEach((c, i) => {
-        cats[i].currentCount += c.currentCount;
+        cats[i].currentCount += fin(c.currentCount);
+        cats[i].activeCount += fin(c.activeCount);
+        cats[i].userCount += fin(c.userCount);
         cats[i].targetCount += c.targetCount;
         cats[i].samplingCount += (Number.isFinite(c.samplingCount) ? c.samplingCount : 0);
         cats[i].conversionCount += (Number.isFinite(c.conversionCount) ? c.conversionCount : 0);
@@ -588,8 +605,6 @@ export function aggregateTeamAop(
   zoneId: string,
 ): Aop {
   const now = new Date().toISOString();
-  const zone = zoneById(zoneId);
-  const collectionPct = zone?.collectionPercent ?? DEFAULT_COLLECTION_PCT;
   const revenue = sumRevenue(teamAops);
   return {
     id: `aop-rollup-${zdmUserId}`,
@@ -603,7 +618,7 @@ export function aggregateTeamAop(
     sampling: sumSampling(teamAops),
     training: sumTraining(teamAops),
     investment: sumInvestment(teamAops),
-    collection: { collectionPercent: collectionPct, milestoneRows: [] },
+    collection: { milestoneRows: [] },
     approvals: [],
     createdAt: now,
     updatedAt: now,
@@ -628,7 +643,7 @@ export function computeAopCompletion(aop: Aop): {
     { key: "rev_total", label: "Total revenue target", done: r.totalRevenueTarget > 0 },
     { key: "rev_aov", label: "Target AOV", done: r.targetAov > 0 },
     { key: "rev_split", label: "Category split", done:
-        r.earlyYearsTarget + r.mathScienceTarget + r.otherCategoriesTarget + r.stemTarget + r.panelTarget > 0,
+        fin(r.earlyYearsTarget) + fin(r.mathScienceTarget) + fin(r.otherCategoriesTarget) + fin(r.stemTarget) + fin(r.panelTarget) > 0,
     },
     { key: "uni_retention", label: "Retention school value", done: (u.retentionPlanValue ?? 0) > 0 },
     { key: "uni_categories", label: "School type targets", done: u.categories.some((c) => Number.isFinite(c.targetCount) && c.targetCount > 0) },
@@ -637,7 +652,7 @@ export function computeAopCompletion(aop: Aop): {
     { key: "train_any", label: "Training plan", done:
         t.userSchoolTrainings + t.nonUserSchoolTrainings + t.digitalTrainings + t.physicalTrainings + t.teacherWorkshops + t.principalWorkshops + t.stemWorkshops + t.productDemonstrations > 0,
     },
-    { key: "collection", label: "Collection milestones", done: aop.collection.milestoneRows.length > 0 },
+    { key: "collection", label: "Collection plan", done: Number.isFinite(aop.revenue.totalRevenueTarget) && aop.revenue.totalRevenueTarget > 0 },
   ];
 
   const done = signals.filter((sig) => sig.done).length;

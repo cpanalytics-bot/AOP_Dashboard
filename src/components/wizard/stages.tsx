@@ -4,19 +4,17 @@ import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Aop, CollectionMilestoneRow } from "@/lib/types";
 import {
-  AutoStat,
   Button,
   Card,
   Field,
+  KpiCard,
   NumberInput,
   Select,
   Stat,
 } from "@/components/ui";
 import {
   collectionPhasingForZone,
-  computeCollection,
   computeRevenueKpis,
-  computeSamplingKpis,
   computeUniverseKpis,
   fmtINR,
   fmtNum,
@@ -136,43 +134,37 @@ export function RevenueStage({ aop, patch, errors, readOnly }: StageProps) {
   const set = (field: keyof typeof r, v: number) => patch("revenue", { [field]: v } as never);
 
   const autoSplit = () => {
+    // Split the TOTAL across the 3 core categories only (STEM/Panel are add-ons).
     const lyParts = [
-      r.earlyYearsRevenueLY,
-      r.mathScienceRevenueLY,
-      r.otherCategoriesRevenueLY,
-      r.stemRevenueLY,
-      r.panelRevenueLY,
+      r.earlyYearsRevenueLY || 0,
+      r.mathScienceRevenueLY || 0,
+      r.otherCategoriesRevenueLY || 0,
     ];
     const lyTotal = lyParts.reduce((s, n) => s + n, 0) || 1;
-    const t = r.totalRevenueTarget;
+    const t = Number.isFinite(r.totalRevenueTarget) ? r.totalRevenueTarget : 0;
     patch("revenue", {
       earlyYearsTarget: Math.round((t * lyParts[0]) / lyTotal),
       mathScienceTarget: Math.round((t * lyParts[1]) / lyTotal),
       otherCategoriesTarget: Math.round((t * lyParts[2]) / lyTotal),
-      stemTarget: Math.round((t * lyParts[3]) / lyTotal),
-      panelTarget: Math.round((t * lyParts[4]) / lyTotal),
     } as never);
   };
 
   return (
     <div className="space-y-4">
-      {/* Frozen / Read-only section — sticky single-line at top */}
-      <div className="sticky top-0 z-10">
-        <Card className="border-amber-200/60 bg-amber-50/20 shadow-sm">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-amber-500 text-sm">🔒</span>
-            <h3 className="text-[13px] font-semibold text-amber-800">Last Year Actuals</h3>
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">Frozen</span>
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-[12.5px]">
-            <span className="text-gray-500">Revenue: <span className="font-semibold text-gray-900">{fmtINR(r.lastYearRevenue)}</span></span>
-            <span className="text-gray-500">Early Years: <span className="font-semibold text-gray-900">{fmtINR(r.earlyYearsRevenueLY)}</span></span>
-            <span className="text-gray-500">Math & Science: <span className="font-semibold text-gray-900">{fmtINR(r.mathScienceRevenueLY)}</span></span>
-            <span className="text-gray-500">Other: <span className="font-semibold text-gray-900">{fmtINR(r.otherCategoriesRevenueLY)}</span></span>
-            <span className="text-gray-500">AOV: <span className="font-semibold text-gray-900">{fmtINR(r.currentAov)}</span></span>
-          </div>
-        </Card>
-      </div>
+      {/* Last-year actuals — proper KPI cards (read-only, from live order data) */}
+      <Card>
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="t-card-heading">Last Year Actuals</h3>
+          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">FY25-26 · Live</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <KpiCard label="Revenue" value={fmtINR(r.lastYearRevenue)} accent="indigo" frozen sub="total last year" />
+          <KpiCard label="Early Years" value={fmtINR(r.earlyYearsRevenueLY)} accent="emerald" frozen />
+          <KpiCard label="Math & Science" value={fmtINR(r.mathScienceRevenueLY)} accent="sky" frozen />
+          <KpiCard label="Other Books" value={fmtINR(r.otherCategoriesRevenueLY)} accent="violet" frozen />
+          <KpiCard label="AOV" value={fmtINR(r.currentAov)} accent="amber" frozen sub="per unique school" />
+        </div>
+      </Card>
 
       {/* Editable section */}
       <Card>
@@ -184,36 +176,55 @@ export function RevenueStage({ aop, patch, errors, readOnly }: StageProps) {
             </Button>
           )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Total revenue target" hint="INR" error={errors.totalRevenueTarget}
-            note="The big number: total money you plan to earn this year.">
-            <NumberInput value={r.totalRevenueTarget} onChange={(v) => set("totalRevenueTarget", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Early years target" hint="INR" note="Part of the total that comes from Early Years products.">
+        <Field label="Total revenue target" hint="INR" required error={errors.totalRevenueTarget}
+          note="The headline number: total revenue you plan to earn in FY26-27.">
+          <NumberInput value={r.totalRevenueTarget} onChange={(v) => set("totalRevenueTarget", v)} disabled={readOnly} />
+        </Field>
+
+        <div className="mt-5 rounded-lg bg-indigo-50/50 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-gray-600">
+          <span className="font-semibold text-gray-700">Total revenue target = Early Years + Math &amp; Science + Other Books.</span>{" "}
+          STEM &amp; Panel are <span className="font-medium text-gray-700">optional add-ons, over and above the total</span> — they are NOT part of this sum.
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="Early Years target" hint="INR" required error={errors.earlyYearsTarget} note="Revenue from Early Years books (Pre-Nursery to UKG).">
             <NumberInput value={r.earlyYearsTarget} onChange={(v) => set("earlyYearsTarget", v)} disabled={readOnly} />
           </Field>
-          <Field label="Math & Science target" hint="INR" note="Part of the total from Math & Science products.">
+          <Field label="Math & Science target" hint="INR" required error={errors.mathScienceTarget} note="Revenue from Maths & Science books (Grade 1–8).">
             <NumberInput value={r.mathScienceTarget} onChange={(v) => set("mathScienceTarget", v)} disabled={readOnly} />
           </Field>
-          <Field label="Other categories target" hint="INR" note="Part of the total from all other products.">
+          <Field label="Other Books target" hint="INR" required error={errors.otherCategoriesTarget} note="Revenue from books OTHER than Early Years and Maths & Science (all other book categories).">
             <NumberInput value={r.otherCategoriesTarget} onChange={(v) => set("otherCategoriesTarget", v)} disabled={readOnly} />
           </Field>
-          <Field label="STEM target" hint="INR" note="Part of the total from STEM products.">
-            <NumberInput value={r.stemTarget} onChange={(v) => set("stemTarget", v)} disabled={readOnly} />
+          <div className="hidden sm:block" />
+          <Field label="STEM target · add-on" hint="INR" note="Extra revenue from STEM kits — over and above the total. Optional.">
+            <NumberInput value={r.stemTarget} onChange={(v) => set("stemTarget", v)} disabled={readOnly} placeholder="Optional add-on" />
           </Field>
-          <Field label="Panel target" hint="INR" note="Part of the total from Panel products.">
-            <NumberInput value={r.panelTarget} onChange={(v) => set("panelTarget", v)} disabled={readOnly} />
+          <Field label="Panel target · add-on" hint="INR" note="Extra revenue from interactive panels / displays — over and above the total. Optional.">
+            <NumberInput value={r.panelTarget} onChange={(v) => set("panelTarget", v)} disabled={readOnly} placeholder="Optional add-on" />
           </Field>
         </div>
-        <p className="mt-3 text-[11.5px] text-gray-400">Tip: the five category targets should add up to the total above. Use Auto-split to fill them instantly.</p>
+
+        <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3.5 py-2 text-[12.5px] ${
+          Number.isFinite(r.totalRevenueTarget) && Math.abs(k.categoryMismatch) > 1
+            ? "border-rose-200 bg-rose-50 text-rose-700"
+            : "border-emerald-200 bg-emerald-50 text-emerald-700"
+        }`}>
+          <span>Early Years + Math &amp; Science + Other Books = <span className="font-semibold">{fmtINR(k.categorySumTarget)}</span>{Number.isFinite(r.totalRevenueTarget) ? ` vs total ${fmtINR(r.totalRevenueTarget)}` : ""}</span>
+          <span className="font-semibold">
+            {Number.isFinite(r.totalRevenueTarget) && Math.abs(k.categoryMismatch) > 1
+              ? `Off by ${fmtINR(Math.abs(k.categoryMismatch))}`
+              : "Balanced ✓"}
+          </span>
+        </div>
       </Card>
 
       <Card>
         <h3 className="mb-1 t-card-heading">Average Order Value (AOV)</h3>
-        <p className="t-caption mb-4">AOV = Total Revenue from Schools ÷ Unique School Count (excludes bulk orders).</p>
+        <p className="t-caption mb-4">Current AOV = sum of FY26-27 valid order value ÷ count of unique schools ordered from. Bulk orders are excluded from both.</p>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FrozenCard label="Current AOV" value={fmtINR(r.currentAov)} note="Calculated from school revenue data." />
-          <Field label="Target AOV" hint="INR" note="How big you want the average order to be.">
+          <FrozenCard label="Current AOV" value={fmtINR(r.currentAov)} note="orders_agg: Σ order amount (excl. cancelled) ÷ unique schools (bulk excluded)." />
+          <Field label="Target AOV" hint="INR" required error={errors.targetAov} note="How big you want the average order to be.">
             <NumberInput value={r.targetAov} onChange={(v) => set("targetAov", v)} disabled={readOnly} />
           </Field>
         </div>
@@ -223,14 +234,9 @@ export function RevenueStage({ aop, patch, errors, readOnly }: StageProps) {
         <h3 className="mb-4 t-card-heading">Live numbers (calculated for you)</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Revenue growth" value={fmtPct(k.revenueGrowthPct)} tone={k.revenueGrowthPct >= 0 ? "green" : "red"} sub="vs last year" />
-          <Stat label="AOV growth" value={fmtPct(k.aovGrowthPct)} sub="bigger orders" />
-          <Stat label="Category sum" value={fmtINR(k.categorySumTarget)} sub="5 categories added" />
-          <Stat
-            label="Sum vs total"
-            value={fmtINR(k.categoryMismatch)}
-            tone={Math.abs(k.categoryMismatch) > 1 ? "red" : "green"}
-            sub={Math.abs(k.categoryMismatch) > 1 ? "Should be 0" : "Balanced"}
-          />
+          <Stat label="Current AOV" value={fmtINR(r.currentAov)} sub="per unique school" />
+          <Stat label="Target AOV" value={fmtINR(r.targetAov)} sub="your goal" />
+          <Stat label="AOV growth" value={fmtPct(k.aovGrowthPct)} tone={k.aovGrowthPct >= 0 ? "green" : "red"} sub="vs current" />
         </div>
       </Card>
     </div>
@@ -240,12 +246,11 @@ export function RevenueStage({ aop, patch, errors, readOnly }: StageProps) {
 // ---------------------------------------------------------------------------
 // Stage: Universe (merged with Sampling & Training)
 // ---------------------------------------------------------------------------
-export function UniverseStage({ aop, patch, readOnly }: StageProps) {
+export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
   const u = aop.universe;
   const s = aop.sampling;
   const t = aop.training;
   const k = computeUniverseKpis(u);
-  const sk = computeSamplingKpis(s, u);
 
   const setU = (field: keyof typeof u, v: number | string | boolean) =>
     patch("universe", { [field]: v } as never);
@@ -262,34 +267,29 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
 
   return (
     <div className="space-y-4">
-      {/* 1. Schools In Your Area Today — sticky, compact single line */}
-      <div className="sticky top-0 z-10">
-        <Card className="border-amber-200/60 bg-amber-50/40 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-amber-500 text-sm">🔒</span>
-              <h3 className="text-[13px] font-semibold text-amber-800">Schools In Your Area Today</h3>
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">Read Only</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px]">
-              <span className="text-gray-500">Total: <span className="font-semibold text-gray-900">{fmtNum(u.totalSchools)}</span></span>
-              <span className="text-gray-500">Active: <span className="font-semibold text-gray-900">{fmtNum(u.activeSchools)}</span></span>
-              <span className="text-gray-500">User: <span className="font-semibold text-gray-900">{fmtNum(u.userSchools)}</span></span>
-              <span className="text-gray-500">Non-user: <span className="font-semibold text-gray-900">{fmtNum(u.nonUserSchools)}</span></span>
-            </div>
-          </div>
-        </Card>
-      </div>
+      {/* 1. Schools In Your Area Today — proper KPI cards (read-only, live) */}
+      <Card>
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="t-card-heading">Schools In Your Area Today</h3>
+          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Read only · Live</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KpiCard label="Total schools" value={fmtNum(u.totalSchools)} accent="slate" frozen sub="mapped in your area" />
+          <KpiCard label="Active schools" value={fmtNum(u.activeSchools)} accent="emerald" frozen sub="currently active" />
+          <KpiCard label="User schools" value={fmtNum(u.userSchools)} accent="indigo" frozen sub="have transacted" />
+          <KpiCard label="Non-user schools" value={fmtNum(u.nonUserSchools)} accent="amber" frozen sub="never ordered" />
+        </div>
+      </Card>
 
       {/* 2. Retention */}
       <Card>
         <h3 className="mb-1 t-card-heading">Retention</h3>
         <p className="t-caption mb-4">How many schools will you retain and at what value?</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Retention school count" note="Number of schools you will retain from current active schools.">
-            <NumberInput value={u.retentionSchoolCount ?? 0} onChange={(v) => setU("retentionSchoolCount", v)} disabled={readOnly} />
+          <Field label="Retention school count" required error={errors.retentionSchoolCount} note="Number of schools you will retain from current active schools.">
+            <NumberInput value={u.retentionSchoolCount ?? NaN} onChange={(v) => setU("retentionSchoolCount", v)} disabled={readOnly} />
           </Field>
-          <Field label="Retention school value" hint="INR" note="Total revenue you expect from retained schools.">
+          <Field label="Retention school value" hint="INR" required error={errors.retentionPlanValue} note="Total revenue you expect from retained schools.">
             <NumberInput value={u.retentionPlanValue ?? 0} onChange={(v) => setU("retentionPlanValue", v)} disabled={readOnly} />
           </Field>
         </div>
@@ -297,42 +297,51 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
 
       {/* 3. School Type Table */}
       <Card>
-        <h3 className="mb-1 t-card-heading">School Types</h3>
-        <p className="t-caption mb-4">For each type, set target schools, sampling schools, and conversion schools (actual counts).</p>
-        <div className="space-y-2">
+        <h3 className="mb-1 t-card-heading">School Types <span className="text-rose-500">*</span></h3>
+        <p className="t-caption mb-1">For each category you see today&apos;s <span className="font-medium text-gray-600">Active</span> and <span className="font-medium text-gray-600">User</span> schools (read-only). <span className="font-medium text-gray-600">Target, Sampling and Conversion are required for every type.</span></p>
+        {(errors.targetCount || errors.samplingCount || errors.conversionCount) && (
+          <p className="mb-2 text-[12px] font-medium text-rose-600">Fill Target, Sampling and Conversion for every school type.</p>
+        )}
+        <div className="space-y-2 scroll-mt-28" data-field-error={(errors.targetCount || errors.samplingCount || errors.conversionCount) ? "true" : undefined}>
           {/* Header row */}
-          <div className="hidden grid-cols-5 gap-2 px-1 sm:grid">
+          <div className="hidden grid-cols-6 gap-2 px-1 sm:grid">
             <span className="t-overline">Type</span>
-            <span className="t-overline">Active Schools</span>
-            <span className="t-overline">Target Schools</span>
-            <span className="t-overline">Sampling Schools</span>
-            <span className="t-overline">Conversion Schools</span>
+            <span className="t-overline">Active</span>
+            <span className="t-overline">User</span>
+            <span className="t-overline">Target <span className="text-rose-500">*</span></span>
+            <span className="t-overline">Sampling <span className="text-rose-500">*</span></span>
+            <span className="t-overline">Conversion <span className="text-rose-500">*</span></span>
           </div>
           {u.categories.map((c, idx) => (
-            <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-5">
+            <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-6">
               <div className="col-span-2 flex items-center gap-1 self-center text-[13px] font-medium text-gray-900 sm:col-span-1">
                 {c.category}
                 <InfoTooltip text={CATEGORY_DEFINITIONS[c.category] ?? `School category: ${c.category}`} />
               </div>
-              {/* Frozen current count */}
+              {/* Frozen — active schools today */}
               <div className="self-center">
-                <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Now:</span></div>
-                <NumberInput value={c.currentCount} onChange={() => {}} disabled />
+                <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Active:</span></div>
+                <NumberInput value={c.activeCount} onChange={() => {}} disabled />
+              </div>
+              {/* Frozen — user schools today */}
+              <div className="self-center">
+                <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">User:</span></div>
+                <NumberInput value={c.userCount} onChange={() => {}} disabled />
               </div>
               {/* Target Schools — editable */}
               <div>
                 <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Target:</span></div>
-                <NumberInput value={c.targetCount} onChange={(v) => setCat(idx, "targetCount", v)} disabled={readOnly} placeholder="Target" />
+                <NumberInput value={c.targetCount} onChange={(v) => setCat(idx, "targetCount", v)} disabled={readOnly} placeholder="Target" invalid={!!errors.targetCount && !Number.isFinite(c.targetCount)} />
               </div>
               {/* Sampling Schools — editable */}
               <div>
                 <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Sampling:</span></div>
-                <NumberInput value={c.samplingCount} onChange={(v) => setCat(idx, "samplingCount", v)} disabled={readOnly} placeholder="Sampling" />
+                <NumberInput value={c.samplingCount} onChange={(v) => setCat(idx, "samplingCount", v)} disabled={readOnly} placeholder="Sampling" invalid={!!errors.samplingCount && !Number.isFinite(c.samplingCount)} />
               </div>
               {/* Conversion Schools — editable (actual count) */}
               <div>
                 <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Conversion:</span></div>
-                <NumberInput value={c.conversionCount} onChange={(v) => setCat(idx, "conversionCount", v)} disabled={readOnly} placeholder="Count" />
+                <NumberInput value={c.conversionCount} onChange={(v) => setCat(idx, "conversionCount", v)} disabled={readOnly} placeholder="Count" invalid={!!errors.conversionCount && !Number.isFinite(c.conversionCount)} />
               </div>
             </div>
           ))}
@@ -351,22 +360,22 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
         <h3 className="mb-1 t-card-heading">How Many Schools Will You Sample?</h3>
         <p className="t-caption mb-4">Break down your sampling plan by product category. These are the schools you will give a free trial.</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="User schools" note="Existing buyers you will sample again."><NumberInput value={s.userSchoolsSampling} onChange={(v) => setS("userSchoolsSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Non-user schools" note="New schools you will sample."><NumberInput value={s.nonUserSchoolsSampling} onChange={(v) => setS("nonUserSchoolsSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Test prep" note="Samples for test-prep products."><NumberInput value={s.testPrepSampling} onChange={(v) => setS("testPrepSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Early years" note="Samples for Early Years products."><NumberInput value={s.earlyYearsSampling} onChange={(v) => setS("earlyYearsSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Math & Science" note="Samples for M&S products."><NumberInput value={s.msSampling} onChange={(v) => setS("msSampling", v)} disabled={readOnly} /></Field>
-          <Field label="STEM" note="Samples for STEM products."><NumberInput value={s.stemSampling} onChange={(v) => setS("stemSampling", v)} disabled={readOnly} /></Field>
+          <Field label="User schools" required error={errors.userSchoolsSampling} note="Existing buyers you will sample again."><NumberInput value={s.userSchoolsSampling} onChange={(v) => setS("userSchoolsSampling", v)} disabled={readOnly} /></Field>
+          <Field label="Non-user schools" required error={errors.nonUserSchoolsSampling} note="New schools you will sample."><NumberInput value={s.nonUserSchoolsSampling} onChange={(v) => setS("nonUserSchoolsSampling", v)} disabled={readOnly} /></Field>
+          <Field label="Test prep" required error={errors.testPrepSampling} note="Samples for test-prep products."><NumberInput value={s.testPrepSampling} onChange={(v) => setS("testPrepSampling", v)} disabled={readOnly} /></Field>
+          <Field label="Early years" required error={errors.earlyYearsSampling} note="Samples for Early Years products."><NumberInput value={s.earlyYearsSampling} onChange={(v) => setS("earlyYearsSampling", v)} disabled={readOnly} /></Field>
+          <Field label="Math & Science" required error={errors.msSampling} note="Samples for M&S products."><NumberInput value={s.msSampling} onChange={(v) => setS("msSampling", v)} disabled={readOnly} /></Field>
+          <Field label="STEM" required error={errors.stemSampling} note="Samples for STEM products."><NumberInput value={s.stemSampling} onChange={(v) => setS("stemSampling", v)} disabled={readOnly} /></Field>
         </div>
       </Card>
 
       {/* 5. Bulk Deal Opportunities */}
       <Card>
-        <h3 className="mb-1 t-card-heading">Bulk Deal Opportunities</h3>
-        <p className="t-caption mb-4">Large one-time orders or institutional deals you plan to pursue.</p>
+        <h3 className="mb-1 t-card-heading">Bulk Deal Opportunities <span className="font-normal text-gray-400">· optional</span></h3>
+        <p className="t-caption mb-4">Optional. Large one-time orders or institutional deals you plan to pursue.</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Bulk deal opportunities" note="Number of big one-time orders you can chase.">
-            <NumberInput value={u.bulkDealOpportunities} onChange={(v) => setU("bulkDealOpportunities", v)} disabled={readOnly} />
+          <Field label="Bulk deal opportunities" note="Optional. Number of big one-time orders you can chase.">
+            <NumberInput value={u.bulkDealOpportunities} onChange={(v) => setU("bulkDealOpportunities", v)} disabled={readOnly} placeholder="Optional" />
           </Field>
           <Field label="Large distributor opportunities" note="Distributor orders above ₹40 lakhs.">
             <NumberInput value={u.largeInstitutionalOpportunities} onChange={(v) => setU("largeInstitutionalOpportunities", v)} disabled={readOnly} />
@@ -376,17 +385,17 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
 
       {/* 6. Training Section */}
       <Card>
-        <h3 className="mb-1 t-card-heading">Trainings & Workshops</h3>
-        <p className="t-caption mb-4">Training means teaching schools how to use our products well so they keep buying.</p>
+        <h3 className="mb-1 t-card-heading">Trainings & Workshops <span className="font-normal text-gray-400">· optional</span></h3>
+        <p className="t-caption mb-4">Optional. Training means teaching schools how to use our products well so they keep buying.</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="User school trainings" note="Sessions for schools that already buy."><NumberInput value={t.userSchoolTrainings} onChange={(v) => setT("userSchoolTrainings", v)} disabled={readOnly} /></Field>
-          <Field label="Non-user school trainings" note="Sessions for schools that don't buy yet."><NumberInput value={t.nonUserSchoolTrainings} onChange={(v) => setT("nonUserSchoolTrainings", v)} disabled={readOnly} /></Field>
-          <Field label="Digital trainings" note="Online sessions."><NumberInput value={t.digitalTrainings} onChange={(v) => setT("digitalTrainings", v)} disabled={readOnly} /></Field>
-          <Field label="Physical trainings" note="In-person sessions."><NumberInput value={t.physicalTrainings} onChange={(v) => setT("physicalTrainings", v)} disabled={readOnly} /></Field>
-          <Field label="Teacher workshops" note="Workshops for teachers."><NumberInput value={t.teacherWorkshops} onChange={(v) => setT("teacherWorkshops", v)} disabled={readOnly} /></Field>
-          <Field label="Principal workshops" note="Workshops for principals."><NumberInput value={t.principalWorkshops} onChange={(v) => setT("principalWorkshops", v)} disabled={readOnly} /></Field>
-          <Field label="STEM workshops" note="Workshops about STEM."><NumberInput value={t.stemWorkshops} onChange={(v) => setT("stemWorkshops", v)} disabled={readOnly} /></Field>
-          <Field label="Product demos" note="Live product demonstrations."><NumberInput value={t.productDemonstrations} onChange={(v) => setT("productDemonstrations", v)} disabled={readOnly} /></Field>
+          <Field label="User school trainings" note="Sessions for schools that already buy."><NumberInput value={t.userSchoolTrainings} onChange={(v) => setT("userSchoolTrainings", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Non-user school trainings" note="Sessions for schools that don't buy yet."><NumberInput value={t.nonUserSchoolTrainings} onChange={(v) => setT("nonUserSchoolTrainings", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Digital trainings" note="Online sessions."><NumberInput value={t.digitalTrainings} onChange={(v) => setT("digitalTrainings", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Physical trainings" note="In-person sessions."><NumberInput value={t.physicalTrainings} onChange={(v) => setT("physicalTrainings", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Teacher workshops" note="Workshops for teachers."><NumberInput value={t.teacherWorkshops} onChange={(v) => setT("teacherWorkshops", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Principal workshops" note="Workshops for principals."><NumberInput value={t.principalWorkshops} onChange={(v) => setT("principalWorkshops", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="STEM workshops" note="Workshops about STEM."><NumberInput value={t.stemWorkshops} onChange={(v) => setT("stemWorkshops", v)} disabled={readOnly} placeholder="Optional" /></Field>
+          <Field label="Product demos" note="Live product demonstrations."><NumberInput value={t.productDemonstrations} onChange={(v) => setT("productDemonstrations", v)} disabled={readOnly} placeholder="Optional" /></Field>
         </div>
       </Card>
     </div>
@@ -409,144 +418,114 @@ export function CollectionStage({ aop, patch, readOnly }: { aop: Aop; patch: Pat
   const zone = zoneById(owner?.zoneId ?? "");
   const regionName = zone?.name;
   const phasing = collectionPhasingForZone(regionName);
-  const pct = aop.collection.collectionPercent;
   const target = aop.revenue.totalRevenueTarget;
-  const c = computeCollection(target, pct, phasing);
-
+  const totalToCollect = Number.isFinite(target) ? target : 0; // FULL revenue target
+  const hasTarget = totalToCollect > 0;
   const rows = aop.collection.milestoneRows ?? [];
 
-  const totalCollectionTarget = c.totalCollectionTarget;
-
-  const recalcRows = (updatedRows: CollectionMilestoneRow[]): CollectionMilestoneRow[] => {
-    let cumulative = 0;
-    return updatedRows.map((row) => {
-      const amt = Math.round((totalCollectionTarget * row.collectionPct) / 100);
-      cumulative += amt;
-      return { ...row, collectionAmount: amt, cumulativeAmount: cumulative };
+  // Re-compute amounts (% of the full revenue target) + running cumulative.
+  const recalc = (rs: CollectionMilestoneRow[]): CollectionMilestoneRow[] => {
+    let cum = 0;
+    return rs.map((r) => {
+      const pct = Number.isFinite(r.collectionPct) ? r.collectionPct : 0;
+      const amt = Math.round((totalToCollect * pct) / 100);
+      cum += amt;
+      return { ...r, collectionAmount: amt, cumulativeAmount: cum };
     });
   };
+  const commit = (rs: CollectionMilestoneRow[]) => patch("collection", { milestoneRows: recalc(rs) } as never);
 
-  const addRow = () => {
-    const newRow: CollectionMilestoneRow = {
-      id: `cm-${Date.now()}`,
-      month: "",
-      collectionPct: 0,
-      collectionAmount: 0,
-      cumulativeAmount: 0,
-    };
-    const updated = recalcRows([...rows, newRow]);
-    patch("collection", { milestoneRows: updated } as never);
+  const addRow = () =>
+    commit([...rows, { id: `cm-${Date.now()}`, month: "", collectionPct: NaN, collectionAmount: 0, cumulativeAmount: 0 }]);
+  const updateRow = (idx: number, field: keyof CollectionMilestoneRow, value: string | number) =>
+    commit(rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  const removeRow = (idx: number) => commit(rows.filter((_, i) => i !== idx));
+  // Optional helper: prefill rows from the region's suggested cumulative curve.
+  const loadSuggestion = () => {
+    let prev = 0;
+    commit(
+      phasing.map((m, i) => {
+        const inc = m.cumulativePct - prev;
+        prev = m.cumulativePct;
+        return { id: `cm-sug-${i}`, month: m.label, collectionPct: inc, collectionAmount: 0, cumulativeAmount: 0 };
+      }),
+    );
   };
 
-  const updateRow = (idx: number, field: keyof CollectionMilestoneRow, value: string | number) => {
-    const updatedRows = rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r));
-    const recalced = recalcRows(updatedRows);
-    patch("collection", { milestoneRows: recalced } as never);
-  };
-
-  const removeRow = (idx: number) => {
-    const updatedRows = rows.filter((_, i) => i !== idx);
-    const recalced = recalcRows(updatedRows);
-    patch("collection", { milestoneRows: recalced } as never);
-  };
+  const totalPhasedPct = rows.reduce((s, r) => s + (Number.isFinite(r.collectionPct) ? r.collectionPct : 0), 0);
+  const totalPhased = rows.reduce((s, r) => s + (r.collectionAmount || 0), 0);
 
   return (
     <div className="space-y-4">
       <Card>
         <StageIntro>
-          Collection means the cash you actually bring in from your sales.
-          The summary below is pre-fetched for your region —
-          <span className="font-semibold text-gray-700">
-            {" "}{regionName ?? "your region"}
-          </span>.
+          Collection is the cash you bring in from your sales. You collect the
+          <span className="font-semibold text-gray-700"> full revenue target</span> — add the
+          months below and the % of that target you plan to collect by each.
         </StageIntro>
-        <h3 className="mb-1 t-card-heading">Cash collection plan</h3>
-        <p className="t-caption mb-4">Region · {regionName ?? "Unmapped"} · {phasing.length} default milestones</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <AutoStat label="Region collection %" value={`${pct}%`} note="Annual collection share for this region." />
-          <AutoStat label="Revenue target" value={fmtINR(target)} note="From the Revenue step." />
-          <AutoStat label="Total to collect" value={fmtINR(c.totalCollectionTarget)} note={`${pct}% of revenue target.`} />
+        <h3 className="mb-3 t-card-heading">Cash collection plan</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <KpiCard label="Revenue target" value={fmtINR(target)} accent="indigo" sub="from the Revenue step" />
+          <KpiCard label="Total to collect" value={fmtINR(totalToCollect)} accent="emerald" sub="100% of the revenue target" />
         </div>
-        {target === 0 && (
+        {!hasTarget && (
           <p className="mt-3 text-[12px] text-amber-600">
-            Set your Total revenue target in the Revenue step and these numbers will fill in.
+            Set your Total revenue target in the Revenue step, then add collection milestones below.
           </p>
         )}
       </Card>
 
-      {/* Editable Milestone Phasing */}
+      {/* Custom, editable milestone lines */}
       <Card>
-        <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="t-card-heading">Milestone Phasing</h3>
-            <p className="t-caption mt-0.5">Plan when you will collect cash through the year. Add rows for each milestone.</p>
+            <h3 className="t-card-heading">Collection Milestones</h3>
+            <p className="t-caption mt-0.5">Add a line for each month and the % of the full revenue target collected by then. Amounts compute automatically.</p>
           </div>
           {!readOnly && (
-            <Button size="sm" variant="outline" onClick={addRow}>
-              + Add Row
-            </Button>
+            <div className="flex gap-2">
+              {regionName && <Button size="sm" variant="ghost" onClick={loadSuggestion}>Use {regionName} suggestion</Button>}
+              <Button size="sm" variant="outline" onClick={addRow}>+ Add line</Button>
+            </div>
           )}
         </div>
 
         {rows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/50 px-4 py-8 text-center">
-            <p className="text-[13px] text-gray-500">No milestones added yet.</p>
+            <p className="text-[13px] text-gray-500">No milestones yet.</p>
             {!readOnly && (
-              <Button size="sm" variant="outline" onClick={addRow} className="mt-3">
-                Add first milestone
-              </Button>
+              <Button size="sm" variant="outline" onClick={addRow} className="mt-3">Add first milestone</Button>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full min-w-[520px] text-left text-[13px]">
+            <table className="w-full min-w-[560px] text-left text-[13px]">
               <thead className="bg-gray-50/80 text-gray-500">
                 <tr>
                   <th className="px-3 py-2 t-overline w-[160px]">Month</th>
                   <th className="px-3 py-2 t-overline">Collection %</th>
-                  <th className="px-3 py-2 t-overline">Collection Amount</th>
-                  <th className="px-3 py-2 t-overline">Cumulative Amount</th>
-                  {!readOnly && <th className="px-3 py-2 t-overline w-[60px]"></th>}
+                  <th className="px-3 py-2 t-overline">Collection amount</th>
+                  <th className="px-3 py-2 t-overline">Cumulative</th>
+                  {!readOnly && <th className="px-3 py-2 t-overline w-[50px]"></th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={row.id} className="border-t border-gray-100">
                     <td className="px-3 py-2">
-                      <Select
-                        value={row.month}
-                        onChange={(e) => updateRow(idx, "month", e.target.value)}
-                        disabled={readOnly}
-                      >
+                      <Select value={row.month} onChange={(e) => updateRow(idx, "month", e.target.value)} disabled={readOnly}>
                         <option value="">Select month</option>
-                        {MONTH_OPTIONS.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
+                        {MONTH_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
                       </Select>
                     </td>
                     <td className="px-3 py-2">
-                      <NumberInput
-                        value={row.collectionPct}
-                        onChange={(v) => updateRow(idx, "collectionPct", v)}
-                        disabled={readOnly}
-                        placeholder="%"
-                      />
+                      <NumberInput value={row.collectionPct} onChange={(v) => updateRow(idx, "collectionPct", v)} disabled={readOnly} placeholder="%" />
                     </td>
-                    <td className="px-3 py-2 tabular-nums font-medium text-gray-900">
-                      {fmtINR(row.collectionAmount)}
-                    </td>
-                    <td className="px-3 py-2 tabular-nums font-semibold text-gray-900">
-                      {fmtINR(row.cumulativeAmount)}
-                    </td>
+                    <td className="px-3 py-2 tabular-nums font-medium text-gray-900">{fmtINR(row.collectionAmount)}</td>
+                    <td className="px-3 py-2 tabular-nums font-semibold text-gray-900">{fmtINR(row.cumulativeAmount)}</td>
                     {!readOnly && (
                       <td className="px-3 py-2">
-                        <button
-                          onClick={() => removeRow(idx)}
-                          className="text-[12px] text-rose-500 hover:text-rose-700 font-medium"
-                          aria-label="Remove row"
-                        >
-                          ✕
-                        </button>
+                        <button onClick={() => removeRow(idx)} className="text-[12px] font-medium text-rose-500 hover:text-rose-700" aria-label="Remove">✕</button>
                       </td>
                     )}
                   </tr>
@@ -557,37 +536,11 @@ export function CollectionStage({ aop, patch, readOnly }: { aop: Aop; patch: Pat
         )}
 
         {rows.length > 0 && (
-          <div className="mt-3 flex items-center gap-4 text-[12px] text-gray-500">
-            <span>Total phased: <span className="font-semibold text-gray-900">{fmtINR(rows.reduce((s, r) => s + r.collectionAmount, 0))}</span></span>
-            <span>Total to collect: <span className="font-semibold text-gray-900">{fmtINR(totalCollectionTarget)}</span></span>
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-[12px] text-gray-500">
+            <span>Phased: <span className={`font-semibold ${Math.round(totalPhasedPct) > 100 ? "text-rose-600" : "text-gray-900"}`}>{fmtNum(totalPhasedPct)}%</span> of target</span>
+            <span>Total phased: <span className="font-semibold text-gray-900">{fmtINR(totalPhased)}</span> / {fmtINR(totalToCollect)}</span>
           </div>
         )}
-      </Card>
-
-      {/* Default regional milestones (reference) */}
-      <Card>
-        <h3 className="mb-1 t-card-heading">Regional Milestone Reference</h3>
-        <p className="t-caption mb-3">Default milestones from the region master table for reference.</p>
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="w-full min-w-[420px] text-left text-[13px]">
-            <thead className="bg-gray-50/80 text-gray-500">
-              <tr>
-                <th className="px-3 py-2 t-overline">Milestone</th>
-                <th className="px-3 py-2 t-overline">Collection %</th>
-                <th className="px-3 py-2 t-overline">Cumulative amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {c.milestones.map((m) => (
-                <tr key={m.label} className="border-t border-gray-100">
-                  <td className="px-3 py-2 font-medium text-gray-900">{m.label}</td>
-                  <td className="px-3 py-2 tabular-nums text-gray-700">{m.cumulativePct}%</td>
-                  <td className="px-3 py-2 tabular-nums text-gray-900">{fmtINR(m.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </Card>
     </div>
   );

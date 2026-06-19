@@ -52,7 +52,8 @@ function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
   const untouchedByStage: Record<string, () => boolean> = {
     revenue: () => blank(aop.revenue.totalRevenueTarget),
     universe: () => aop.universe.categories.every((c) => blank(c.targetCount)),
-    collection: () => aop.collection.milestoneRows.length === 0,
+    // Collection is auto-derived from the revenue target — "ready" once that's set.
+    collection: () => blank(aop.revenue.totalRevenueTarget),
   };
 
   // Map wizard keys to validation schema keys. Universe validates its own
@@ -164,7 +165,17 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
 
   const goNext = () => {
     const key = STAGES[step].key;
-    if (!readOnly && !validateStageKey(key)) return;
+    if (!readOnly && !validateStageKey(key)) {
+      // Jump to the first missing mandatory field and focus it.
+      setTimeout(() => {
+        const el = document.querySelector<HTMLElement>('[data-field-error="true"]');
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.querySelector<HTMLElement>("input,select,textarea")?.focus({ preventScroll: true });
+        }
+      }, 60);
+      return;
+    }
     if (!readOnly) persist();
     setStep((s) => Math.min(s + 1, STAGES.length - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -328,7 +339,7 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
       </div>
 
       {/* Stage body */}
-      <div className="min-h-[40vh]">
+      <div key={stageKey} className="stage-enter min-h-[40vh]">
         {stageKey === "revenue" && (
           <div className="space-y-4">
             <EmployeeProfile userId={employeeId} />
@@ -437,6 +448,56 @@ function ReviewStage({
         </div>
       </Card>
 
+      {/* Targets vs Actuals — fields are wired; achievement fills in once the
+          operational (actuals) tables are connected. */}
+      <Card>
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <h3 className="t-card-heading">Targets vs Actuals</h3>
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-200">Actuals sync pending</span>
+        </div>
+        <p className="t-caption mb-3">Achievement and % populate automatically once the operational (actuals) tables are connected.</p>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full min-w-[480px] text-left text-[13px]">
+            <thead className="bg-gray-50/80 text-gray-500">
+              <tr>
+                <th className="px-3 py-2 t-overline">Metric</th>
+                <th className="px-3 py-2 t-overline">Target</th>
+                <th className="px-3 py-2 t-overline">Achieved</th>
+                <th className="px-3 py-2 t-overline">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const uni = computeUniverseKpis(aop.universe);
+                const act = aop.actuals ?? {};
+                const rows: { m: string; tNum: number; money: boolean; a?: number }[] = [
+                  { m: "Revenue", tNum: aop.revenue.totalRevenueTarget, money: true, a: act.revenueAchieved },
+                  { m: "AOV", tNum: aop.revenue.targetAov, money: true, a: act.aovAchieved },
+                  { m: "Active schools (universe)", tNum: uni.targetTotalFromCategories, money: false, a: act.activeSchoolsAchieved },
+                  { m: "Retention schools", tNum: aop.universe.retentionSchoolCount ?? 0, money: false, a: act.retentionSchoolsAchieved },
+                  { m: "Sampling schools", tNum: uni.totalSamplingFromCategories, money: false, a: act.sampledSchoolsAchieved },
+                  { m: "Conversion schools", tNum: uni.totalConversionFromCategories, money: false, a: act.convertedSchoolsAchieved },
+                  { m: "Collection", tNum: aop.revenue.totalRevenueTarget, money: true, a: act.collectionReceived },
+                ];
+                return rows.map((row) => {
+                  const fmt = (n: number) => (row.money ? fmtINR(n) : fmtNum(n));
+                  const hasA = typeof row.a === "number" && Number.isFinite(row.a);
+                  const pctVal = hasA && row.tNum > 0 ? fmtPct((row.a! / row.tNum) * 100) : "—";
+                  return (
+                    <tr key={row.m} className="border-t border-gray-100">
+                      <td className="px-3 py-2 font-medium text-gray-900">{row.m}</td>
+                      <td className="px-3 py-2 tabular-nums text-gray-700">{Number.isFinite(row.tNum) ? fmt(row.tNum) : "—"}</td>
+                      <td className="px-3 py-2 tabular-nums text-gray-400">{hasA ? fmt(row.a!) : "—"}</td>
+                      <td className="px-3 py-2 tabular-nums text-gray-400">{pctVal}</td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       {flags.length > 0 && (
         <Card>
           <h3 className="mb-4 t-card-heading">Validation & flags</h3>
@@ -465,7 +526,9 @@ function ReviewStage({
           ["Target AOV", fmtINR(aop.revenue.targetAov)],
           ["Early Years", fmtINR(aop.revenue.earlyYearsTarget)],
           ["Math & Science", fmtINR(aop.revenue.mathScienceTarget)],
-          ["Other categories", fmtINR(aop.revenue.otherCategoriesTarget)],
+          ["Other Books", fmtINR(aop.revenue.otherCategoriesTarget)],
+          ["STEM (optional)", Number.isFinite(aop.revenue.stemTarget) ? fmtINR(aop.revenue.stemTarget) : "—"],
+          ["Panel (optional)", Number.isFinite(aop.revenue.panelTarget) ? fmtINR(aop.revenue.panelTarget) : "—"],
         ]} />
         <SummaryCard title="Universe plan" onJump={() => jumpToStage("universe")} rows={(() => {
           const uniKpis = computeUniverseKpis(aop.universe);
@@ -501,13 +564,12 @@ function ReviewStage({
             aop.training.stemWorkshops + aop.training.productDemonstrations)],
         ]} />
         <SummaryCard title="Collection plan" onJump={() => jumpToStage("collection")} rows={(() => {
-          const c = computeCollection(aop.revenue.totalRevenueTarget, aop.collection.collectionPercent);
-          const rows: [string, string][] = [
-            ["Collection %", `${c.collectionPercent}%`],
+          const c = computeCollection(aop.revenue.totalRevenueTarget);
+          return [
+            ["Collection basis", "Full revenue target"],
             ["Total to collect", fmtINR(c.totalCollectionTarget)],
-            ["Milestones", `${aop.collection.milestoneRows.length} rows`],
-          ];
-          return rows;
+            ["Milestones", `${c.milestones.length} phases`],
+          ] as [string, string][];
         })()} />
       </div>
 

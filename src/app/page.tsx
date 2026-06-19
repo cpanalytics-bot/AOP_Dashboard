@@ -25,8 +25,8 @@ export default function ZdmDashboardPage() {
   return (
     <AppShell>
       <TeamCommandCenter
-        title="ZDM command center"
-        description="Plan, review, and manage your zone team. Your zone AOP is auto-derived from team submissions."
+        title="Zonal Manager Command Center"
+        description="Plan and submit the AOP for every member of your zone. Your zone roll-up is auto-derived from their plans."
       />
     </AppShell>
   );

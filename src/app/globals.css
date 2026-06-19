@@ -159,6 +159,48 @@ input[type="number"] {
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* Page / stage enter transition — gentle fade + rise. NOTE: fill-mode is NOT
+   "forwards/both" on purpose: a retained transform (even translateY(0)) makes a
+   containing block that breaks position:fixed for descendants (the wizard action
+   bar). The end keyframe equals the base style, so reverting after the run is
+   seamless and leaves no transform behind. */
+.page-enter {
+  animation: page-enter 280ms cubic-bezier(0.16, 0.84, 0.44, 1) backwards;
+}
+.stage-enter {
+  animation: page-enter 220ms cubic-bezier(0.16, 0.84, 0.44, 1) backwards;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .stage-enter { animation: none; }
+}
+
+/* Auth screen — quiet enterprise backdrop + OTP digit caret */
+.auth-bg {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(79, 70, 229, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 90% 110%, rgba(14, 165, 233, 0.06), transparent 55%),
+    var(--background);
+}
+.otp-input {
+  letter-spacing: 0.7em;
+  text-indent: 0.35em;
+}
+
+/* Sticky member column in the wide Targets analytics tables */
+.targets-table th.sticky-c,
+.targets-table td.sticky-c {
+  position: sticky;
+  left: 36px;
+  z-index: 1;
+}
+.targets-table thead th.sticky-c {
+  background: rgb(249 250 251 / 0.95);
+}
+
 /* Sticky first column in roster table */
 .roster-table th.sticky-col,
 .roster-table td.sticky-col {

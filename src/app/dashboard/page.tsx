@@ -132,6 +132,7 @@ function TeamDashboard() {
       retentionPct: k.retentionPct,
       achieved: ytdAchievementPct(u),
       targetSchools: uni.targetTotalFromCategories,
+      builtSchools: uni.currentTotalFromCategories,
       samplingSchools: uni.totalSamplingFromCategories,
       conversionSchools: uni.totalConversionFromCategories,
       retentionCount: aop.universe.retentionSchoolCount ?? 0,
@@ -229,7 +230,7 @@ function TeamDashboard() {
                 <th className="t-overline py-2 px-2 font-semibold">Retention</th>
                 <th className="t-overline py-2 px-2 font-semibold">Sampling</th>
                 <th className="t-overline py-2 px-2 font-semibold">Conversion</th>
-                <th className="t-overline py-2 px-2 font-semibold">Collection %</th>
+                <th className="t-overline py-2 px-2 font-semibold">Universe Built</th>
                 <th className="t-overline py-2 px-2 font-semibold">Status</th>
               </tr>
             </thead>
@@ -245,7 +246,9 @@ function TeamDashboard() {
                   <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.retentionCount)}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.samplingSchools)}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.conversionSchools)}</td>
-                  <td className="py-2 px-2 tabular-nums text-gray-700">{r.aop.collection.collectionPercent}%</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-700">
+                    {fmtNum(r.builtSchools)}<span className="text-gray-400"> / {fmtNum(r.targetSchools)}</span>
+                  </td>
                   <td className="py-2 px-2">
                     <Badge tone={r.status === "approved" ? "green" : r.status === "submitted" ? "blue" : "slate"}>{r.status}</Badge>
                   </td>
@@ -260,7 +263,9 @@ function TeamDashboard() {
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.retentionCount, 0))}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.samplingSchools, 0))}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(detailedRows.reduce((s, r) => s + r.conversionSchools, 0))}</td>
-                  <td className="py-2 px-2 text-gray-400">—</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">
+                    {fmtNum(detailedRows.reduce((s, r) => s + r.builtSchools, 0))}<span className="text-gray-400"> / {fmtNum(totalSchools)}</span>
+                  </td>
                   <td className="py-2 px-2 text-gray-400">—</td>
                 </tr>
               )}

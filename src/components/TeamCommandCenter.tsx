@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
   Card,
   EmptyState,
+  Field,
+  Modal,
   ProgressBar,
+  Select,
   StatusPill,
+  TextInput,
 } from "@/components/ui";
 import {
   computeAopCompletion,
@@ -40,7 +45,7 @@ function relativeTime(iso: string): string {
 
 const FILTER_KEY = "aop-tcc-filters-v1";
 
-function loadFilters(): { view: "action" | "all"; role: Role | "ALL"; query: string } | null {
+function loadFilters(): { role: Role | "ALL"; query: string } | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(FILTER_KEY);
@@ -69,14 +74,33 @@ export function TeamCommandCenter({
     canEditAop,
     canApproveAop,
     recordApproval,
+    addTbhMember,
     auditLogs,
   } = useStore();
+  const router = useRouter();
 
   const persisted = loadFilters();
+  const [addOpen, setAddOpen] = useState(false);
+  const [tbhName, setTbhName] = useState("");
+  const [tbhRole, setTbhRole] = useState("BDA");
+  const [tbhBase, setTbhBase] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const handleAddTbh = async () => {
+    if (adding) return;
+    setAdding(true);
+    const id = await addTbhMember(tbhName.trim(), tbhRole, tbhBase.trim());
+    setAdding(false);
+    if (id) {
+      setAddOpen(false);
+      setTbhName(""); setTbhBase(""); setTbhRole("BDA");
+      router.push(`/aop/${encodeURIComponent(id)}`);
+    }
+  };
   const [query, setQuery] = useState(persisted?.query ?? "");
   const [roleFilter, setRoleFilter] = useState<Role | "ALL">(persisted?.role ?? "ALL");
-  const [view, setView] = useState<"action" | "all">(persisted?.view ?? "action");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [detailSort, setDetailSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
 
   // Persist filters
   useEffect(() => {
@@ -84,12 +108,12 @@ export function TeamCommandCenter({
     try {
       window.localStorage.setItem(
         FILTER_KEY,
-        JSON.stringify({ view, role: roleFilter, query }),
+        JSON.stringify({ role: roleFilter, query }),
       );
     } catch {
       /* ignore */
     }
-  }, [view, roleFilter, query]);
+  }, [roleFilter, query]);
 
   const teamMembers = useMemo(() => {
     let list = visibleEmployees().filter((u) => u.role !== "ADMIN");
@@ -154,29 +178,57 @@ export function TeamCommandCenter({
     [teamMembers, getAop],
   );
 
+  const onDetailSort = (col: string) =>
+    setDetailSort((s) => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }));
+
+  const sortedDetails = useMemo(() => {
+    const val = (r: (typeof enriched)[number]): string | number => {
+      const uni = computeUniverseKpis(r.aop.universe);
+      switch (detailSort.col) {
+        case "revenue": return r.aop.revenue.totalRevenueTarget || 0;
+        case "aov": return r.aop.revenue.targetAov || 0;
+        case "targetSchools": return uni.targetTotalFromCategories || 0;
+        case "built": return uni.currentTotalFromCategories || 0;
+        case "retention": return r.aop.universe.retentionSchoolCount ?? 0;
+        case "sampling": return uni.totalSamplingFromCategories || 0;
+        case "conversion": return uni.totalConversionFromCategories || 0;
+        case "status": return r.aop.status;
+        default: return r.emp.name.toLowerCase();
+      }
+    };
+    return [...enriched].sort((a, b) => {
+      const av = val(a), bv = val(b);
+      const cmp = typeof av === "string" && typeof bv === "string" ? av.localeCompare(bv) : Number(av) - Number(bv);
+      return detailSort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [enriched, detailSort]);
+
   const awaitingApproval = enriched.filter(
     (r) => r.aop.status === "submitted" || r.aop.status === "in_review",
   );
-  const notStarted = enriched.filter((r) => r.aop.status === "not_started");
   const changesRequested = enriched.filter((r) => r.aop.status === "changes_requested");
+  // "Needs filling" — the ZM still owes this plan: not yet submitted/approved AND
+  // not yet complete. This is the fix for the old "0 pending" bug: a draft that is
+  // empty (or any not-started member) now correctly counts as needing action.
+  const needsFilling = enriched.filter(
+    (r) => !["submitted", "in_review", "approved"].includes(r.aop.status) && r.pct < 100,
+  );
   const atRisk = enriched.filter((r) => r.atRisk);
 
-  // Drafts are the ZM's own in-progress work, not an exception that needs a
-  // nudge — they surface in "All team" and the AOP Details table, not here.
-  const actionCount =
-    awaitingApproval.length + notStarted.length + changesRequested.length + atRisk.length;
+  // A member needs the ZM's attention if any signal fires (counted once).
+  const needsAttention = (r: (typeof enriched)[number]) =>
+    r.aop.status === "submitted" ||
+    r.aop.status === "in_review" ||
+    r.aop.status === "changes_requested" ||
+    r.atRisk ||
+    (!["submitted", "in_review", "approved"].includes(r.aop.status) && r.pct < 100);
+  const actionCount = enriched.filter(needsAttention).length;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  // Roster rows after view filter
-  const visibleRows = enriched.filter((r) => {
-    if (view === "all") return true;
-    return (
-      ["submitted", "in_review", "not_started", "changes_requested"].includes(r.aop.status) ||
-      r.atRisk
-    );
-  });
+  // Single table — every team member is shown; the per-row CTA carries the action.
+  const visibleRows = enriched;
 
   // ----- Selection helpers -----
   const selectableIds = visibleRows
@@ -327,14 +379,14 @@ export function TeamCommandCenter({
                 href={`/aop/${encodeURIComponent(changesRequested[0].emp.id)}`}
               />
             )}
-            {notStarted.length > 0 && (
+            {needsFilling.length > 0 && (
               <ActionRow
                 tone="slate"
                 icon="○"
-                title={`${notStarted.length} team member${notStarted.length === 1 ? "" : "s"} haven't started`}
-                sub={notStarted.slice(0, 2).map((r) => r.emp.name.split(" ")[0]).join(", ") + (notStarted.length > 2 ? "…" : "")}
-                action="Nudge"
-                href={`/aop/${encodeURIComponent(notStarted[0].emp.id)}`}
+                title={`${needsFilling.length} plan${needsFilling.length === 1 ? "" : "s"} still need filling`}
+                sub={needsFilling.slice(0, 2).map((r) => r.emp.name.split(" ")[0]).join(", ") + (needsFilling.length > 2 ? "…" : "")}
+                action="Open"
+                href={`/aop/${encodeURIComponent(needsFilling[0].emp.id)}`}
               />
             )}
             {atRisk.length > 0 && (
@@ -371,13 +423,14 @@ export function TeamCommandCenter({
 
       {/* Roster controls */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-          <ViewTab active={view === "action"} onClick={() => setView("action")}>
-            Needs action <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-700">{actionCount}</span>
-          </ViewTab>
-          <ViewTab active={view === "all"} onClick={() => setView("all")}>
-            All team <span className="ml-1.5 rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-600">{teamMembers.length}</span>
-          </ViewTab>
+        <div>
+          <h2 className="t-title">Your team</h2>
+          <p className="t-caption mt-0.5">
+            All {teamMembers.length} member{teamMembers.length === 1 ? "" : "s"} ·{" "}
+            <span className={actionCount > 0 ? "font-medium text-amber-600" : "font-medium text-emerald-600"}>
+              {actionCount} need{actionCount === 1 ? "s" : ""} action
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -399,6 +452,7 @@ export function TeamCommandCenter({
               </button>
             ))}
           </div>
+          {!readOnly && <Button size="sm" onClick={() => setAddOpen(true)}>+ Add member</Button>}
           <Button variant="outline" size="sm" onClick={downloadCsv}>Export</Button>
         </div>
       </div>
@@ -420,19 +474,18 @@ export function TeamCommandCenter({
       {/* Action table — team roster (where the ZM takes action) */}
       <Card className="!p-0 overflow-x-auto">
         {visibleRows.length === 0 ? (
-          view === "action" && actionCount === 0 ? (
-            <EmptyState
-              icon="✓"
-              title="Inbox zero"
-              description="No team member needs your attention right now. Switch to All team to see everyone."
-              action={<Button size="sm" variant="outline" onClick={() => setView("all")}>Show all team</Button>}
-            />
-          ) : (
+          query.trim() || roleFilter !== "ALL" ? (
             <EmptyState
               icon="?"
               title="No matches"
               description="Try a different search or role filter."
               action={<Button size="sm" variant="outline" onClick={() => { setQuery(""); setRoleFilter("ALL"); }}>Clear filters</Button>}
+            />
+          ) : (
+            <EmptyState
+              icon="○"
+              title="No team members yet"
+              description="Once your team is mapped, every member will appear here for you to fill their AOP."
             />
           )
         ) : (
@@ -486,19 +539,19 @@ export function TeamCommandCenter({
           <table className="w-full min-w-[900px] text-left text-[12.5px]">
             <thead className="bg-gray-50/80 text-gray-500">
               <tr className="border-b border-gray-200">
-                <th className="t-overline py-2 px-2 font-semibold">Employee</th>
-                <th className="t-overline py-2 px-2 font-semibold">Revenue Target</th>
-                <th className="t-overline py-2 px-2 font-semibold">Target AOV</th>
-                <th className="t-overline py-2 px-2 font-semibold">Target Schools</th>
-                <th className="t-overline py-2 px-2 font-semibold">Retention</th>
-                <th className="t-overline py-2 px-2 font-semibold">Sampling</th>
-                <th className="t-overline py-2 px-2 font-semibold">Conversion</th>
-                <th className="t-overline py-2 px-2 font-semibold">Collection %</th>
-                <th className="t-overline py-2 px-2 font-semibold">Status</th>
+                <SortTh label="Employee" col="name" tip="Team member" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Revenue Target" col="revenue" tip="Total revenue this member plans to earn in FY26-27" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Target AOV" col="aov" tip="Planned average order value = revenue ÷ unique ordering schools" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Target Schools" col="targetSchools" tip="Total schools targeted across all categories" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Universe Built" col="built" tip="Schools currently mapped (active universe) vs the target" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Retention" col="retention" tip="Schools the member plans to retain from current actives" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Sampling" col="sampling" tip="Schools planned for product sampling" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Conversion" col="conversion" tip="Schools planned to convert into orders" sort={detailSort} onSort={onDetailSort} />
+                <SortTh label="Status" col="status" tip="Plan status (not started → draft → submitted → approved)" sort={detailSort} onSort={onDetailSort} />
               </tr>
             </thead>
             <tbody>
-              {enriched.map((r) => {
+              {sortedDetails.map((r) => {
                 const uni = computeUniverseKpis(r.aop.universe);
                 return (
                   <tr key={r.emp.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
@@ -508,10 +561,13 @@ export function TeamCommandCenter({
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.aop.revenue.totalRevenueTarget)}</td>
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtINR(r.aop.revenue.targetAov)}</td>
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.targetTotalFromCategories)}</td>
+                    <td className="py-2 px-2 tabular-nums text-gray-700">
+                      {fmtNum(uni.currentTotalFromCategories)}
+                      <span className="text-gray-400"> / {fmtNum(uni.targetTotalFromCategories)}</span>
+                    </td>
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(r.aop.universe.retentionSchoolCount ?? 0)}</td>
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.totalSamplingFromCategories)}</td>
                     <td className="py-2 px-2 tabular-nums text-gray-700">{fmtNum(uni.totalConversionFromCategories)}</td>
-                    <td className="py-2 px-2 tabular-nums text-gray-700">{r.aop.collection.collectionPercent}%</td>
                     <td className="py-2 px-2"><StatusPill status={r.aop.status} /></td>
                   </tr>
                 );
@@ -522,10 +578,13 @@ export function TeamCommandCenter({
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtINR(metrics.totalRevenuePlanned)}</td>
                   <td className="py-2 px-2 text-gray-400">—</td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(metrics.totalSchoolsPlanned)}</td>
+                  <td className="py-2 px-2 tabular-nums text-gray-900">
+                    {fmtNum(enriched.reduce((s, r) => s + computeUniverseKpis(r.aop.universe).currentTotalFromCategories, 0))}
+                    <span className="text-gray-400"> / {fmtNum(metrics.totalSchoolsPlanned)}</span>
+                  </td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + (r.aop.universe.retentionSchoolCount ?? 0), 0))}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + computeUniverseKpis(r.aop.universe).totalSamplingFromCategories, 0))}</td>
                   <td className="py-2 px-2 tabular-nums text-gray-900">{fmtNum(enriched.reduce((s, r) => s + computeUniverseKpis(r.aop.universe).totalConversionFromCategories, 0))}</td>
-                  <td className="py-2 px-2 text-gray-400">—</td>
                   <td className="py-2 px-2 text-gray-400">—</td>
                 </tr>
               )}
@@ -533,6 +592,36 @@ export function TeamCommandCenter({
           </table>
         </div>
       </Card>
+
+      {/* Add a "To Be Hired" placeholder member */}
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add team member"
+        description="Create a placeholder you can plan an AOP for now, and map to a real hire later."
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <Field label="Name" note="Use a label like “TBH · South Faridabad” if the person isn't hired yet.">
+            <TextInput value={tbhName} onChange={(e) => setTbhName(e.target.value)} placeholder="To Be Hired" />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Role">
+              <Select value={tbhRole} onChange={(e) => setTbhRole(e.target.value)}>
+                <option value="BDA">BDA</option>
+                <option value="BDM">BDM</option>
+              </Select>
+            </Field>
+            <Field label="Base location">
+              <TextInput value={tbhBase} onChange={(e) => setTbhBase(e.target.value)} placeholder="City / district" />
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleAddTbh} disabled={adding}>{adding ? "Adding…" : "Add & open AOP"}</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -568,6 +657,27 @@ function ContextStat({ label, value, sub }: { label: string; value: string; sub?
       <div className="mt-1 text-base font-semibold tracking-tight text-gray-900">{value}</div>
       {sub && <div className="t-caption mt-0.5">{sub}</div>}
     </div>
+  );
+}
+
+/** Sortable, tooltip'd table header. */
+function SortTh({
+  label, col, tip, sort, onSort,
+}: {
+  label: string;
+  col: string;
+  tip: string;
+  sort: { col: string; dir: "asc" | "desc" };
+  onSort: (col: string) => void;
+}) {
+  const active = sort.col === col;
+  return (
+    <th className="t-overline py-2 px-2 font-semibold">
+      <button type="button" title={tip} onClick={() => onSort(col)} className="inline-flex items-center gap-1 hover:text-gray-900">
+        {label}
+        <span className={`text-[9px] ${active ? "text-indigo-500" : "text-gray-300"}`}>{active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
   );
 }
 
@@ -608,19 +718,6 @@ function ActionRow({
         {action} →
       </span>
     </Link>
-  );
-}
-
-function ViewTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex min-h-[32px] items-center rounded-md px-3 text-[13px] font-medium transition ${
-        active ? "bg-indigo-600 text-white" : "text-gray-600 hover:text-gray-900"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -680,6 +777,7 @@ function TeamRow({
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="truncate font-medium text-gray-900">{emp.name}</span>
               <Badge tone="slate">{emp.role}</Badge>
+              {emp.isTbh && <Badge tone="amber">TBH</Badge>}
               {isRollup && <Badge tone="indigo">Roll-up</Badge>}
               {atRisk && <Badge tone="red" ariaLabel="At risk">⚠</Badge>}
             </div>

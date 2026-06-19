@@ -26,24 +26,35 @@ function nullifyNaN<T extends Record<string, unknown>>(o: T): T {
   return out as T;
 }
 
-interface SavedCat { current_count: number; target_count: number; projected_conversion_pct: number }
+interface SavedCat { current_count: number; target_count: number; sampling_count: number; conversion_count: number; projected_conversion_pct: number }
 
 function buildCategories(
   snap: MemberSnapshot | undefined, saved: Map<string, SavedCat>, currentAov: number,
 ): SchoolCategoryPlan[] {
-  const snapMap = new Map<string, number>();
-  (snap?.categories ?? []).forEach((c) => snapMap.set(c.category, c.current_count));
+  const totalMap = new Map<string, number>();
+  const activeMap = new Map<string, number>();
+  const userMap = new Map<string, number>();
+  (snap?.categories ?? []).forEach((c) => {
+    totalMap.set(c.category, c.current_count);
+    activeMap.set(c.category, c.active_count ?? 0);
+    userMap.set(c.category, c.user_count ?? 0);
+  });
   return UNIVERSE_CATEGORIES.map((cat) => {
     const sv = saved.get(cat);
-    const current = sv?.current_count ?? (cat === "Chain" ? snap?.chain ?? 0 : snapMap.get(cat) ?? 0);
+    const current = sv?.current_count ?? (cat === "Chain" ? snap?.chain ?? 0 : totalMap.get(cat) ?? 0);
+    // Active/User are always "today" snapshot values (not user-editable).
+    const active = cat === "Chain" ? snap?.chain ?? 0 : activeMap.get(cat) ?? 0;
+    const user = cat === "Chain" ? 0 : userMap.get(cat) ?? 0;
     const target = sv ? sv.target_count : NaN;          // blank until entered
     const conv = sv ? sv.projected_conversion_pct : NaN;
     return {
       category: cat,
       currentCount: current,
+      activeCount: active,
+      userCount: user,
       targetCount: target,
-      samplingCount: NaN,
-      conversionCount: NaN,
+      samplingCount: sv ? sv.sampling_count : NaN,
+      conversionCount: sv ? sv.conversion_count : NaN,
       projectedConversion: conv,
       projectedRevenue: Math.round(target * (conv / 100) * currentAov),
     };
@@ -69,7 +80,7 @@ function toUser(r: EmpRow): User {
     name: r.name ?? r.email,
     email: r.email,
     role: r.role as Role,
-    designation: r.role === "ZDM" ? "Zonal Manager" : r.role === "ADMIN" ? "Program Team" : r.role,
+    designation: r.role === "ZDM" ? "Zonal Manager" : r.role === "ADMIN" ? "Admin Team" : r.role,
     baseLocation: r.city_district ?? "",
     zoneId: r.zonal_manager_email ?? "",
     districtIds: r.city_district ? [r.city_district] : [],
@@ -88,10 +99,90 @@ export async function liveLogin(email: string): Promise<User | null> {
   return toUser(data[0] as EmpRow);
 }
 
+export type OtpResult = { ok: boolean; reason?: "unauthorized" | "error"; message?: string; user?: User };
+
+/**
+ * Step 1 of OTP sign-in. Gate on authorization FIRST (so we never email a code
+ * to someone who isn't a permitted user), then send a 6-digit code via Supabase
+ * Auth email OTP.
+ */
+export async function sendLoginOtp(email: string): Promise<OtpResult> {
+  const e = email.trim();
+  if (!e) return { ok: false, reason: "error", message: "Enter your email." };
+  const user = await liveLogin(e);
+  if (!user) return { ok: false, reason: "unauthorized" };
+  const { error } = await sb().auth.signInWithOtp({
+    email: e,
+    options: { shouldCreateUser: true },
+  });
+  if (error) return { ok: false, reason: "error", message: error.message };
+  return { ok: true, user };
+}
+
+/** Step 2 of OTP sign-in. Verify the code, then resolve the authorized user. */
+export async function verifyLoginOtp(email: string, token: string): Promise<OtpResult> {
+  const e = email.trim();
+  const { error } = await sb().auth.verifyOtp({ email: e, token: token.trim(), type: "email" });
+  if (error) return { ok: false, reason: "error", message: error.message };
+  const user = await liveLogin(e);
+  if (!user) return { ok: false, reason: "unauthorized" };
+  return { ok: true, user };
+}
+
+/** Clear the Supabase Auth session on logout. */
+export async function signOutAuth(): Promise<void> {
+  try { await sb().auth.signOut(); } catch { /* ignore */ }
+}
+
 export async function liveTeam(zmEmail: string): Promise<User[]> {
   const { data, error } = await sb().rpc("aop_team", { p_zm_email: zmEmail });
   if (error || !data) return [];
   return (data as EmpRow[]).map(toUser);
+}
+
+// ---- To-Be-Hired (TBH) placeholder members -------------------------------
+
+interface TbhRow {
+  id: string; zm_email: string; name: string; role: string;
+  base_location: string | null; mapped_email: string | null;
+}
+function tbhToUser(r: TbhRow): User {
+  return {
+    id: r.id,
+    employeeCode: "TBH",
+    name: r.name || "To Be Hired",
+    email: r.id, // AOP + territory key under the TBH id until a real email is mapped
+    role: (r.role as Role) || "BDA",
+    designation: r.role === "BDM" ? "Business Dev Manager · TBH" : "Business Dev Associate · TBH",
+    baseLocation: r.base_location ?? "",
+    zoneId: r.zm_email,
+    districtIds: [],
+    reportingManagerId: r.zm_email,
+    currentRevenue: 0,
+    currentTarget: 0,
+    isActive: true,
+    isTbh: true,
+    mappedEmail: r.mapped_email ?? null,
+  };
+}
+export async function liveListTbh(zmEmail: string): Promise<User[]> {
+  const { data } = await sb().from("aop_tbh_member").select("*")
+    .eq("zm_email", zmEmail).eq("fy", FY).order("created_at", { ascending: true });
+  return ((data ?? []) as TbhRow[]).map(tbhToUser);
+}
+export async function liveAddTbh(
+  zmEmail: string, name: string, role: string, baseLocation: string,
+): Promise<User | null> {
+  const { data, error } = await sb().from("aop_tbh_member")
+    .insert({ zm_email: zmEmail, name: name || "To Be Hired", role, base_location: baseLocation })
+    .select("*").single();
+  if (error || !data) return null;
+  return tbhToUser(data as TbhRow);
+}
+export async function liveUpdateTbh(
+  id: string, patch: { name?: string; role?: string; base_location?: string; mapped_email?: string | null },
+): Promise<void> {
+  await sb().from("aop_tbh_member").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
 }
 
 export async function liveListZms(): Promise<{ email: string; name: string; city_district: string | null }[]> {
@@ -105,20 +196,43 @@ export async function liveDistrictsForState(state: string): Promise<string[]> {
   return ((data ?? []) as { district: string }[]).map((d) => d.district);
 }
 
+// Districts of the employee's OWN state (derived server-side from emp_record).
+// This is what drives the assigned-district dropdown in live mode.
+export async function liveDistrictsForEmployee(email: string): Promise<string[]> {
+  const { data, error } = await sb().rpc("aop_districts_for_employee", { p_email: email });
+  if (error || !data) return [];
+  return (data as { district: string }[]).map((d) => d.district);
+}
+
 export interface MemberSnapshot {
   revenue?: {
     last_year_revenue: number; early_years_ly: number; math_science_ly: number;
     other_categories_ly: number; current_aov: number;
   };
+  // Spec-correct per-school AOV (FY26-27 valid orders, bulk excluded). Top-level
+  // so it survives even when there is no aop_src_revenue_ly row for the member.
+  aov?: number;
   universe?: { total_schools: number; active_schools: number; user_schools: number; non_user_schools: number };
   chain?: number;
   ytd?: number;
-  categories?: { category: string; current_count: number }[];
+  categories?: { category: string; current_count: number; active_count?: number; user_count?: number }[];
 }
 
 export async function liveSnapshot(email: string): Promise<MemberSnapshot> {
   const { data } = await sb().rpc("aop_member_snapshot", { p_email: email });
   return (data ?? {}) as MemberSnapshot;
+}
+
+// Batched: every team member's snapshot in ONE call (avoids N parallel heavy
+// RPCs that overload the DB and return 500 → blank data).
+export async function liveTeamSnapshot(zmEmail: string): Promise<Map<string, MemberSnapshot>> {
+  const m = new Map<string, MemberSnapshot>();
+  const { data, error } = await sb().rpc("aop_team_snapshot", { p_zm_email: zmEmail });
+  if (error || !data) return m;
+  (data as { employee_email: string; snapshot: MemberSnapshot }[]).forEach((r) =>
+    m.set(r.employee_email, (r.snapshot ?? {}) as MemberSnapshot),
+  );
+  return m;
 }
 
 // ---- Master (one submission per ZM per FY) --------------------------------
@@ -157,6 +271,7 @@ function applyUniverse(aop: Aop, u: Record<string, number>) {
   aop.universe.userSchools = nz(u.user_schools);
   aop.universe.nonUserSchools = nz(u.non_user_schools);
   aop.universe.retentionPlan = nz(u.retention_plan_pct);
+  aop.universe.retentionSchoolCount = nz(u.retention_school_count);
   aop.universe.retentionPlanValue = nz(u.retention_plan_value);
   aop.universe.bulkDealOpportunities = nz(u.bulk_deal_opportunities);
 }
@@ -211,6 +326,7 @@ const universeRow = (a: Aop) => ({
   total_schools: a.universe.totalSchools, active_schools: a.universe.activeSchools,
   user_schools: a.universe.userSchools, non_user_schools: a.universe.nonUserSchools,
   retention_plan_pct: a.universe.retentionPlan,
+  retention_school_count: a.universe.retentionSchoolCount,
   retention_plan_value: a.universe.retentionPlanValue || 0,
   bulk_deal_opportunities: a.universe.bulkDealOpportunities,
 });
@@ -247,8 +363,10 @@ function applySnapshot(aop: Aop, snap?: MemberSnapshot) {
     aop.revenue.earlyYearsRevenueLY = set(aop.revenue.earlyYearsRevenueLY, snap.revenue.early_years_ly);
     aop.revenue.mathScienceRevenueLY = set(aop.revenue.mathScienceRevenueLY, snap.revenue.math_science_ly);
     aop.revenue.otherCategoriesRevenueLY = set(aop.revenue.otherCategoriesRevenueLY, snap.revenue.other_categories_ly);
-    aop.revenue.currentAov = set(aop.revenue.currentAov, snap.revenue.current_aov);
   }
+  // Current AOV = spec-correct per-school AOV (top-level), falling back to the
+  // revenue block. Lives outside the revenue guard so it fills even with no LY row.
+  aop.revenue.currentAov = set(aop.revenue.currentAov, snap.aov ?? snap.revenue?.current_aov);
   if (snap.universe) {
     aop.universe.totalSchools = set(aop.universe.totalSchools, snap.universe.total_schools);
     aop.universe.activeSchools = set(aop.universe.activeSchools, snap.universe.active_schools);
@@ -259,18 +377,27 @@ function applySnapshot(aop: Aop, snap?: MemberSnapshot) {
 
 // ---- Load all member AOPs for a submission --------------------------------
 
+export interface MemberMeta {
+  status: AopStatus;
+  baseLocation?: string;
+  districts?: string[];
+  states?: string[];
+  blocks?: string[];
+}
+
 export async function liveLoadBundle(
-  aopId: string, status: AopStatus, team: User[],
-): Promise<Record<string, Aop>> {
+  aopId: string, status: AopStatus, team: User[], zmEmail: string,
+): Promise<{ aops: Record<string, Aop>; members: Record<string, MemberMeta> }> {
   const c = sb();
-  const [rev, uni, samp, tr, cost, col, appr] = await Promise.all([
+  const [rev, uni, samp, tr, cost, appr, mem, col] = await Promise.all([
     c.from("aop_revenue").select("*").eq("aop_id", aopId),
     c.from("aop_universe").select("*").eq("aop_id", aopId),
     c.from("aop_sampling_conversion").select("*").eq("aop_id", aopId),
     c.from("aop_training").select("*").eq("aop_id", aopId),
     c.from("aop_cost").select("*").eq("aop_id", aopId),
-    c.from("aop_collection").select("*").eq("aop_id", aopId),
     c.from("aop_approval_log").select("*").eq("aop_id", aopId).order("created_at", { ascending: true }),
+    c.from("aop_member").select("*").eq("aop_id", aopId),
+    c.from("aop_collection").select("*").eq("aop_id", aopId),
   ]);
   const byEmail = <T extends { employee_email: string }>(rows: T[] | null) => {
     const m = new Map<string, T>();
@@ -282,15 +409,12 @@ export async function liveLoadBundle(
   const sampM = byEmail(samp.data as { employee_email: string }[]);
   const trM = byEmail(tr.data as { employee_email: string }[]);
   const costM = byEmail(cost.data as { employee_email: string }[]);
+  const memM = byEmail(mem.data as { employee_email: string }[]);
   const colM = byEmail(col.data as { employee_email: string }[]);
 
-  // Members with no saved revenue/universe row yet need their 🔵 auto numbers
-  // pulled live from the source views (snapshot is frozen only once they save).
-  const needSnapshot = team.filter((u) => !revM.has(u.email) || !uniM.has(u.email));
-  const snaps = new Map<string, MemberSnapshot>();
-  await Promise.all(
-    needSnapshot.map(async (u) => { snaps.set(u.email, await liveSnapshot(u.email)); }),
-  );
+  // Snapshot every member in ONE batched call (the 🔵 "today" numbers — AOV,
+  // schools-in-area, per-category active/user split — are live source data).
+  const snaps = await liveTeamSnapshot(zmEmail);
 
   // Saved category rows (target/conv) link via universe_id.
   const universeIds = [...uniM.values()]
@@ -305,6 +429,8 @@ export async function liveLoadBundle(
       m.set(r.category as string, {
         current_count: Number(r.current_count) || 0,
         target_count: nz(r.target_count),
+        sampling_count: nz(r.sampling_count),
+        conversion_count: nz(r.conversion_count),
         projected_conversion_pct: nz(r.projected_conversion_pct),
       });
       catByEmail.set(email, m);
@@ -312,16 +438,35 @@ export async function liveLoadBundle(
   }
 
   const out: Record<string, Aop> = {};
+  const members: Record<string, MemberMeta> = {};
   for (const u of team) {
     const a = defaultAop(u.id);
-    a.status = status;
+    // Per-member status (Program Team approves each plan). Falls back to the
+    // zone status only if there's no member row at all.
+    const mm = memM.get(u.email) as Record<string, unknown> | undefined;
+    a.status = ((mm?.status as AopStatus) || (mm ? "draft" : status) || "not_started") as AopStatus;
+    members[u.email] = {
+      status: a.status,
+      baseLocation: (mm?.base_location as string) ?? undefined,
+      districts: (mm?.districts as string[]) ?? undefined,
+      states: (mm?.states as string[]) ?? undefined,
+      blocks: (mm?.blocks as string[]) ?? undefined,
+    };
     const r = revM.get(u.email); if (r) applyRevenue(a, r as unknown as Record<string, number>);
     const un = uniM.get(u.email); if (un) applyUniverse(a, un as unknown as Record<string, number>);
     const s = sampM.get(u.email); if (s) applySampling(a, s as unknown as Record<string, number>);
     const t = trM.get(u.email); if (t) applyTraining(a, t as unknown as Record<string, number>);
     const cs = costM.get(u.email); if (cs) applyCost(a, cs as unknown as Record<string, number>);
-    const cl = colM.get(u.email) as { collection_percent?: number } | undefined;
-    a.collection.collectionPercent = cl?.collection_percent ?? 80;
+    const cl = colM.get(u.email) as { milestones?: unknown } | undefined;
+    if (cl?.milestones && Array.isArray(cl.milestones)) {
+      a.collection.milestoneRows = (cl.milestones as Record<string, unknown>[]).map((m) => ({
+        id: String(m.id ?? `cm-${Math.random().toString(36).slice(2, 7)}`),
+        month: (m.month as string) ?? "",
+        collectionPct: m.collectionPct == null ? NaN : Number(m.collectionPct),
+        collectionAmount: Number(m.collectionAmount) || 0,
+        cumulativeAmount: Number(m.cumulativeAmount) || 0,
+      }));
+    }
     applySnapshot(a, snaps.get(u.email)); // fills 🔵 fields only where not already saved
     a.universe.categories = buildCategories(
       snaps.get(u.email), catByEmail.get(u.email) ?? new Map(), a.revenue.currentAov);
@@ -334,7 +479,7 @@ export async function liveLoadBundle(
     createdAt: (e.created_at as string) ?? "",
   }));
   Object.values(out).forEach((a) => (a.approvals = approvals));
-  return out;
+  return { aops: out, members };
 }
 
 // ---- Writes ---------------------------------------------------------------
@@ -356,8 +501,11 @@ export async function liveSaveAop(aopId: string, zmEmail: string, aop: Aop): Pro
     c.from("aop_training").upsert(nullifyNaN({ ...keys, ...trainingRow(aop) }), { onConflict }),
     c.from("aop_cost").upsert(nullifyNaN({ ...keys, ...costRow(aop) }), { onConflict }),
     c.from("aop_collection").upsert(
-      nullifyNaN({ ...keys, collection_percent: aop.collection.collectionPercent || 80,
-        total_revenue_target: aop.revenue.totalRevenueTarget }), { onConflict }),
+      nullifyNaN({ ...keys, collection_percent: 100, // collect the full revenue target
+        total_revenue_target: aop.revenue.totalRevenueTarget,
+        milestones: aop.collection.milestoneRows.map((r) => ({
+          ...r, collectionPct: Number.isFinite(r.collectionPct) ? r.collectionPct : null,
+        })) }), { onConflict }),
     c.from("aop_member").upsert({ ...keys, is_filled: true }, { onConflict }),
   ];
 
@@ -368,6 +516,7 @@ export async function liveSaveAop(aopId: string, zmEmail: string, aop: Aop): Pro
       .map((cat) => nullifyNaN({
         universe_id: universeId, employee_email: aop.userId, zm_email: zmEmail,
         category: cat.category, current_count: cat.currentCount, target_count: cat.targetCount,
+        sampling_count: cat.samplingCount, conversion_count: cat.conversionCount,
         projected_conversion_pct: cat.projectedConversion, exp_revenue: cat.projectedRevenue,
       }));
     if (catRows.length) {
@@ -375,29 +524,101 @@ export async function liveSaveAop(aopId: string, zmEmail: string, aop: Aop): Pro
     }
   }
   await Promise.all(tasks);
+  // A filled-but-unsubmitted plan is a "draft". Promote only from not_started so
+  // we never downgrade a submitted/approved member.
+  await c.from("aop_member").update({ status: "draft" })
+    .eq("aop_id", aopId).eq("employee_email", aop.userId).eq("status", "not_started");
 }
 
 const STATUS_FOR: Record<ApprovalAction, AopStatus> = {
   submit: "submitted", approve: "approved", reject: "rejected", request_changes: "changes_requested",
 };
 
+// Per-member approval: status lives on aop_member; the log is keyed by member.
 export async function liveRecordApproval(
-  aopId: string, action: ApprovalAction, byEmail: string, comment: string,
+  aopId: string, memberEmail: string, action: ApprovalAction, byEmail: string, comment: string,
 ): Promise<void> {
   const c = sb();
-  await c.from("aop_approval_log").insert({ aop_id: aopId, action, by_email: byEmail, comment });
+  await c.from("aop_approval_log").insert({ aop_id: aopId, employee_email: memberEmail, action, by_email: byEmail, comment });
   const patch: Record<string, unknown> = { status: STATUS_FOR[action], updated_at: new Date().toISOString() };
   if (action === "submit") patch.submitted_at = new Date().toISOString();
   else { patch.reviewed_by = byEmail; patch.reviewed_at = new Date().toISOString(); }
-  await c.from("aop_master").update(patch).eq("id", aopId);
+  await c.from("aop_member").update(patch).eq("aop_id", aopId).eq("employee_email", memberEmail);
 }
 
 export async function liveUpdateProfile(
-  aopId: string, zmEmail: string, email: string, baseLocation: string, districts: string[],
+  aopId: string, zmEmail: string, email: string,
+  baseLocation: string, districts: string[], states: string[] = [], blocks: string[] = [],
 ): Promise<void> {
   await sb().from("aop_member").upsert(
-    { aop_id: aopId, employee_email: email, zm_email: zmEmail, base_location: baseLocation, districts },
+    { aop_id: aopId, employee_email: email, zm_email: zmEmail, base_location: baseLocation, districts, states, blocks },
     { onConflict: "aop_id,employee_email" });
+}
+
+// ---- Territory pickers (powered by all_india_schools) ---------------------
+
+export async function liveStates(): Promise<string[]> {
+  const { data } = await sb().rpc("aop_states");
+  return ((data ?? []) as { state: string }[]).map((d) => d.state);
+}
+export async function liveDistrictsForStates(states: string[]): Promise<string[]> {
+  if (!states.length) return [];
+  const { data } = await sb().rpc("aop_districts_for_states", { p_states: states });
+  return ((data ?? []) as { district: string }[]).map((d) => d.district);
+}
+export async function liveBlocksForDistricts(districts: string[]): Promise<string[]> {
+  if (!districts.length) return [];
+  const { data } = await sb().rpc("aop_blocks_for_districts", { p_districts: districts });
+  return ((data ?? []) as { block: string }[]).map((d) => d.block);
+}
+export async function liveTerritoryDefaults(email: string): Promise<{ state: string | null; district: string | null }> {
+  const { data } = await sb().rpc("aop_territory_defaults", { p_email: email });
+  const row = ((data ?? []) as { state: string | null; district: string | null }[])[0];
+  return { state: row?.state ?? null, district: row?.district ?? null };
+}
+
+// ---- Admin (Program Team) cross-zone overview -----------------------------
+
+export interface AdminOverviewRow {
+  zm_email: string; zm_name: string; member_email: string; member_name: string;
+  member_role: string; city_district: string | null; member_status: AopStatus;
+  is_filled: boolean; revenue_target: number | null; target_aov: number | null; target_schools: number | null;
+  last_year_revenue: number | null; active_schools: number | null;
+}
+export async function liveAdminOverview(): Promise<AdminOverviewRow[]> {
+  const { data, error } = await sb().rpc("aop_admin_overview");
+  if (error || !data) return [];
+  return data as AdminOverviewRow[];
+}
+export interface AdminTargetRow {
+  zm_email: string; zm_name: string; member_email: string; member_name: string;
+  member_role: string; city_district: string | null; member_status: AopStatus; is_filled: boolean;
+  last_year_revenue: number | null; total_revenue_target: number | null; early_years_target: number | null;
+  math_science_target: number | null; other_books_target: number | null; stem_target: number | null;
+  panel_target: number | null; current_aov: number | null; target_aov: number | null;
+  total_schools: number | null; active_schools: number | null; user_schools: number | null;
+  non_user_schools: number | null; target_schools: number | null; sampling_schools: number | null;
+  conversion_schools: number | null; retention_count: number | null; retention_value: number | null;
+  collection_target: number | null; milestones: unknown;
+}
+export async function liveAdminTargets(): Promise<AdminTargetRow[]> {
+  const { data, error } = await sb().rpc("aop_admin_targets");
+  if (error || !data) return [];
+  return data as AdminTargetRow[];
+}
+
+export interface AdminHiringRow { zm_email: string; status: string; requests: number; positions: number }
+export async function liveAdminHiring(): Promise<AdminHiringRow[]> {
+  const { data, error } = await sb().rpc("aop_admin_hiring");
+  if (error || !data) return [];
+  return data as AdminHiringRow[];
+}
+export async function liveMemberSetStatus(
+  memberEmail: string, zmEmail: string, action: ApprovalAction, byEmail: string, comment: string,
+): Promise<void> {
+  await sb().rpc("aop_member_set_status", {
+    p_member_email: memberEmail, p_zm_email: zmEmail, p_action: action, p_by_email: byEmail, p_comment: comment,
+  });
 }
 
 // ---- Hiring ---------------------------------------------------------------

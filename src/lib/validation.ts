@@ -1,11 +1,9 @@
 import { z } from "zod";
 
 // Mandatory numeric: must be a real entered number (blank = NaN → fails).
-const reqNum = z.number().refine((v) => Number.isFinite(v), "Required");
-const reqPct = z
-  .number()
-  .refine((v) => Number.isFinite(v), "Required")
-  .refine((v) => v >= 0 && v <= 100, "Enter 0–100");
+// Accept number-or-NaN at the type level so a blank field reports the friendly
+// "Required" (not Zod's "Expected number, received nan").
+const reqNum = z.number().or(z.nan()).refine((v) => Number.isFinite(v), "Required");
 // Lenient (auto/derived fields we don't force the user to fill).
 const auto = z.number().or(z.nan());
 
@@ -30,20 +28,23 @@ export const hiringSchema = z.object({
   hiringTimeline: z.string().min(1, "Select a month"),
 });
 
-// All user-entered fields are mandatory.
+// Mandatory: total + the three core category targets + AOV.
+// STEM and Panel are optional (auto) — they can be left blank.
 export const revenueSchema = z.object({
   totalRevenueTarget: reqNum,
   earlyYearsTarget: reqNum,
   mathScienceTarget: reqNum,
-  otherCategoriesTarget: reqNum,
-  stemTarget: reqNum,
-  panelTarget: reqNum,
+  otherCategoriesTarget: reqNum, // labelled "Other Books" in the UI
+  stemTarget: auto,
+  panelTarget: auto,
   targetAov: reqNum,
 });
 
 export const categorySchema = z.object({
   category: z.string(),
   currentCount: auto,
+  activeCount: auto,
+  userCount: auto,
   targetCount: reqNum,
   samplingCount: reqNum,
   conversionCount: reqNum,
@@ -51,10 +52,12 @@ export const categorySchema = z.object({
   projectedConversion: auto,
 });
 
+// Mandatory: School Types (categories) + Retention (count & value).
 export const universeSchema = z.object({
   categories: z.array(categorySchema),
+  retentionSchoolCount: reqNum,
   retentionPlanValue: reqNum,
-  bulkDealOpportunities: reqNum,
+  bulkDealOpportunities: auto, // Bulk deals are optional
 });
 
 export const samplingSchema = z.object({
@@ -64,28 +67,35 @@ export const samplingSchema = z.object({
   earlyYearsSampling: reqNum,
   msSampling: reqNum,
   stemSampling: reqNum,
-  panelSampling: reqNum,
+  panelSampling: auto, // no input field — not collected, so not mandatory
 });
 
+// Trainings & Workshops are optional.
 export const trainingSchema = z.object({
-  userSchoolTrainings: reqNum,
-  nonUserSchoolTrainings: reqNum,
-  digitalTrainings: reqNum,
-  physicalTrainings: reqNum,
-  teacherWorkshops: reqNum,
-  principalWorkshops: reqNum,
-  stemWorkshops: reqNum,
-  productDemonstrations: reqNum,
+  userSchoolTrainings: auto,
+  nonUserSchoolTrainings: auto,
+  digitalTrainings: auto,
+  physicalTrainings: auto,
+  teacherWorkshops: auto,
+  principalWorkshops: auto,
+  stemWorkshops: auto,
+  productDemonstrations: auto,
 });
 
+// Collection is fully auto-derived from the revenue target + region phasing,
+// so it never blocks submission. Rows are validated leniently if present.
 export const collectionSchema = z.object({
-  milestoneRows: z.array(z.object({
-    id: z.string(),
-    month: z.string().min(1, "Select a month"),
-    collectionPct: reqPct,
-    collectionAmount: auto,
-    cumulativeAmount: auto,
-  })),
+  milestoneRows: z
+    .array(
+      z.object({
+        id: z.string(),
+        month: z.string(),
+        collectionPct: auto,
+        collectionAmount: auto,
+        cumulativeAmount: auto,
+      }),
+    )
+    .optional(),
 });
 
 export type StageKey =

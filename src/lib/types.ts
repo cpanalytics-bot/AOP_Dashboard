@@ -72,10 +72,15 @@ export interface User {
   baseLocation: string;
   zoneId: string;
   districtIds: string[];
+  states?: string[];
+  blocks?: string[];
   reportingManagerId: string | null;
   currentRevenue: number;
   currentTarget: number;
   isActive?: boolean;
+  /** "To Be Hired" placeholder added by a ZM; mapped to a real email once hired. */
+  isTbh?: boolean;
+  mappedEmail?: string | null;
 }
 
 export interface HiringRequest {
@@ -118,7 +123,12 @@ export interface RevenueTargets {
 // mock mode may still use its own labels, so this is a plain string.
 export interface SchoolCategoryPlan {
   category: string;
+  /** Total schools mapped in this category today (the universe you've built). */
   currentCount: number;
+  /** Active schools in this category today (subset of currentCount). 🔵 auto. */
+  activeCount: number;
+  /** User schools in this category today (have transacted). 🔵 auto. */
+  userCount: number;
   targetCount: number;
   samplingCount: number;
   conversionCount: number;
@@ -202,9 +212,23 @@ export interface CollectionMilestoneRow {
   cumulativeAmount: number;
 }
 
+// Collection is the full revenue target (no region % haircut). Milestones are
+// auto-derived from the region phasing × the revenue target; we still persist
+// the generated rows so a submitted plan carries its phasing snapshot.
 export interface CollectionPlanning {
-  collectionPercent: number;
   milestoneRows: CollectionMilestoneRow[];
+}
+
+// Targets-vs-actuals. Actuals are wired in once the operational tables are
+// connected; until then these stay undefined and the UI shows "pending".
+export interface AopActuals {
+  revenueAchieved?: number;
+  aovAchieved?: number;
+  activeSchoolsAchieved?: number;
+  retentionSchoolsAchieved?: number;
+  sampledSchoolsAchieved?: number;
+  convertedSchoolsAchieved?: number;
+  collectionReceived?: number;
 }
 
 export interface ApprovalEvent {
@@ -229,6 +253,7 @@ export interface Aop {
   training: TrainingPlanning;
   investment: InvestmentPlanning;
   collection: CollectionPlanning;
+  actuals?: AopActuals;
   approvals: ApprovalEvent[];
   createdAt: string;
   updatedAt: string;

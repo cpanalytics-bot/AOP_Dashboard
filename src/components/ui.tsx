@@ -148,6 +148,7 @@ export function Field({
   hint,
   note,
   error,
+  required = false,
   children,
 }: {
   label: string;
@@ -155,17 +156,22 @@ export function Field({
   /** Plain-English, one-line explanation shown under the input. */
   note?: string;
   error?: string;
+  /** Marks the field mandatory: shows a red * and is targeted by scroll-to-error. */
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="block scroll-mt-28" data-field-error={error ? "true" : undefined}>
       <span className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="t-label">{label}</span>
+        <span className="t-label">
+          {label}
+          {required && <span className="ml-0.5 font-semibold text-rose-500" aria-hidden>*</span>}
+        </span>
         {hint && <span className="t-caption">{hint}</span>}
       </span>
-      {children}
+      <div className={error ? "rounded-lg ring-2 ring-rose-400/60" : ""}>{children}</div>
       {note && <span className="mt-1 block text-[11.5px] leading-snug text-gray-400">{note}</span>}
-      {error && <span className="mt-1 block text-[12px] text-rose-600">{error}</span>}
+      {error && <span className="mt-1 block text-[12px] font-medium text-rose-600">{error}</span>}
     </label>
   );
 }
@@ -202,16 +208,18 @@ const inputBase =
 export function NumberInput({
   value,
   onChange,
+  invalid = false,
   ...props
 }: {
   value: number;
   onChange: (v: number) => void;
+  invalid?: boolean;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
   return (
     <input
       type="number"
       inputMode="decimal"
-      className={inputBase}
+      className={`${inputBase} ${invalid ? "border-rose-400 ring-2 ring-rose-300/50" : ""}`}
       // Blank (NaN) renders as an empty box; clearing the box reports NaN so the
       // field reads as "not filled" for mandatory validation.
       value={Number.isFinite(value) ? value : ""}
@@ -269,6 +277,178 @@ export function Stat({
       <div className="t-overline">{label}</div>
       <div className={`mt-1 text-xl font-semibold tracking-tight ${valueTone}`}>{value}</div>
       {sub && <div className="t-caption mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * Prominent KPI card for header metric grids (Last-Year actuals, Schools-in-area).
+ * Bigger than `Stat`, with an optional accent tint and a "frozen" lock chip for
+ * read-only snapshot values.
+ */
+export function KpiCard({
+  label,
+  value,
+  sub,
+  accent = "indigo",
+  frozen = false,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "indigo" | "emerald" | "sky" | "amber" | "violet" | "slate";
+  frozen?: boolean;
+}) {
+  const accents: Record<string, string> = {
+    indigo: "from-indigo-50",
+    emerald: "from-emerald-50",
+    sky: "from-sky-50",
+    amber: "from-amber-50",
+    violet: "from-violet-50",
+    slate: "from-gray-50",
+  };
+  const dots: Record<string, string> = {
+    indigo: "bg-indigo-500",
+    emerald: "bg-emerald-500",
+    sky: "bg-sky-500",
+    amber: "bg-amber-500",
+    violet: "bg-violet-500",
+    slate: "bg-gray-400",
+  };
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-b ${accents[accent]} to-white p-3.5`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${dots[accent]}`} aria-hidden />
+        <span className="t-overline">{label}</span>
+        {frozen && (
+          <span className="ml-auto rounded bg-white/70 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 ring-1 ring-inset ring-gray-200">
+            🔒 Live
+          </span>
+        )}
+      </div>
+      <div className="mt-1.5 text-[22px] font-semibold leading-7 tracking-tight text-gray-900 tabular-nums">{value}</div>
+      {sub && <div className="t-caption mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+/** Inline spinner for buttons and loading overlays. */
+export function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent align-[-0.125em] ${className}`}
+      role="status"
+      aria-label="Loading"
+    />
+  );
+}
+
+/**
+ * Searchable multi-select. Trigger + popover with a search box and checkbox list,
+ * plus removable chips for the current selection. Smooth, keyboard-friendly.
+ */
+export function SearchableMultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder = "Select…",
+  searchPlaceholder = "Search…",
+  emptyText = "No options",
+  disabled = false,
+  loading = false,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  disabled?: boolean;
+  loading?: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const filtered = React.useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return needle ? options.filter((o) => o.toLowerCase().includes(needle)) : options;
+  }, [options, q]);
+
+  const toggle = (o: string) =>
+    onChange(selected.includes(o) ? selected.filter((x) => x !== o) : [...selected, o]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+      >
+        <span className="truncate">
+          {selected.length ? `${selected.length} selected` : <span className="text-gray-400">{placeholder}</span>}
+        </span>
+        <span className="ml-2 shrink-0 text-gray-400">{loading ? "…" : open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="border-b border-gray-100 p-2">
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[13px] outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/15"
+            />
+          </div>
+          <div className="max-h-60 overflow-auto">
+            {loading && <div className="px-3 py-2 text-[13px] text-gray-500">Loading…</div>}
+            {!loading && filtered.length === 0 && <div className="px-3 py-2 text-[13px] text-gray-500">{emptyText}</div>}
+            {filtered.map((o) => (
+              <label key={o} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[13px] hover:bg-indigo-50">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(o)}
+                  onChange={() => toggle(o)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-gray-700">{o}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-1.5">
+            <span className="text-[11px] text-gray-400">{selected.length} selected</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onChange([])} className="text-[12px] font-medium text-gray-500 hover:text-gray-700">Clear</button>
+              <button type="button" onClick={() => setOpen(false)} className="text-[12px] font-medium text-indigo-600 hover:underline">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selected.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selected.map((s) => (
+            <span key={s} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2 pr-1 text-[12px] text-indigo-700 ring-1 ring-inset ring-indigo-200">
+              {s}
+              {!disabled && (
+                <button type="button" onClick={() => toggle(s)} aria-label={`Remove ${s}`} className="grid h-4 w-4 place-items-center rounded-full text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700">×</button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
