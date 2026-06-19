@@ -116,6 +116,7 @@ export function Wizard({ employeeId }: { employeeId: string }) {
     canEditAop,
     canApproveAop,
     isRollupAop,
+    hydrating,
   } = useStore();
 
   const target = users.find((u) => u.id === employeeId);
@@ -234,6 +235,11 @@ export function Wizard({ employeeId }: { employeeId: string }) {
   }, [step, readOnly, draft]);
 
   if (!target) {
+    // While the store is (re)hydrating from Supabase the roster may be empty —
+    // show a loader instead of a false "not found".
+    if (hydrating || users.length === 0) {
+      return <Card><p className="t-body">Loading…</p></Card>;
+    }
     return <Card><p className="t-body">Employee not found.</p></Card>;
   }
 

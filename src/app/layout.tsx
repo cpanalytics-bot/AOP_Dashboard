@@ -28,8 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body
+        style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
+        suppressHydrationWarning
+      >
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

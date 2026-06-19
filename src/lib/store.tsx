@@ -147,7 +147,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const email = typeof window !== "undefined" ? window.localStorage.getItem(LIVE_EMAIL_KEY) : null;
       setHydrated(true);
       if (email) {
-        live.liveLogin(email).then((u) => { if (u) void hydrateLive(u); });
+        setHydrating(true); // keep loaders up across the whole re-hydrate window
+        live.liveLogin(email).then((u) => {
+          if (u) void hydrateLive(u);
+          else setHydrating(false);
+        });
       }
       return;
     }

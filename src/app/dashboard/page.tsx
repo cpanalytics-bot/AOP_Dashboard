@@ -185,7 +185,7 @@ function TeamDashboard() {
                   <td className={`py-2.5 pr-3 font-medium ${r.achieved >= 90 ? "text-emerald-600" : r.achieved >= 75 ? "text-amber-600" : "text-rose-600"}`}>{r.achieved}%</td>
                   <td className="py-2.5 pr-3 text-gray-500">{r.status}</td>
                   <td className="py-2.5">
-                    <Link href={`/aop/${r.user.id}`} className="font-medium text-indigo-600 hover:text-indigo-700">Open</Link>
+                    <Link href={`/aop/${encodeURIComponent(r.user.id)}`} className="font-medium text-indigo-600 hover:text-indigo-700">Open</Link>
                   </td>
                 </tr>
               ))}

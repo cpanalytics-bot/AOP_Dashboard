@@ -311,7 +311,7 @@ export function TeamCommandCenter({
                 title={`${awaitingApproval.length} plan${awaitingApproval.length === 1 ? "" : "s"} waiting for approval`}
                 sub={awaitingApproval.slice(0, 2).map((r) => r.emp.name.split(" ")[0]).join(", ") + (awaitingApproval.length > 2 ? "…" : "")}
                 action="Review"
-                href={`/aop/${awaitingApproval[0].emp.id}`}
+                href={`/aop/${encodeURIComponent(awaitingApproval[0].emp.id)}`}
               />
             )}
             {changesRequested.length > 0 && (
@@ -321,7 +321,7 @@ export function TeamCommandCenter({
                 title={`${changesRequested.length} plan${changesRequested.length === 1 ? "" : "s"} need changes`}
                 sub="Awaiting team revision"
                 action="Open"
-                href={`/aop/${changesRequested[0].emp.id}`}
+                href={`/aop/${encodeURIComponent(changesRequested[0].emp.id)}`}
               />
             )}
             {notStarted.length > 0 && (
@@ -331,7 +331,7 @@ export function TeamCommandCenter({
                 title={`${notStarted.length} team member${notStarted.length === 1 ? "" : "s"} haven't started`}
                 sub={notStarted.slice(0, 2).map((r) => r.emp.name.split(" ")[0]).join(", ") + (notStarted.length > 2 ? "…" : "")}
                 action="Nudge"
-                href={`/aop/${notStarted[0].emp.id}`}
+                href={`/aop/${encodeURIComponent(notStarted[0].emp.id)}`}
               />
             )}
             {drafts.length > 0 && (
@@ -341,7 +341,7 @@ export function TeamCommandCenter({
                 title={`${drafts.length} draft${drafts.length === 1 ? "" : "s"} in progress`}
                 sub="Encourage submission"
                 action="View"
-                href={`/aop/${drafts[0].emp.id}`}
+                href={`/aop/${encodeURIComponent(drafts[0].emp.id)}`}
               />
             )}
             {atRisk.length > 0 && (
@@ -351,7 +351,7 @@ export function TeamCommandCenter({
                 title={`${atRisk.length} plan${atRisk.length === 1 ? "" : "s"} at risk`}
                 sub="Aggressive growth or revenue regression"
                 action="Inspect"
-                href={`/aop/${atRisk[0].emp.id}`}
+                href={`/aop/${encodeURIComponent(atRisk[0].emp.id)}`}
               />
             )}
           </div>
@@ -654,7 +654,7 @@ function TeamRow({
       </td>
       <td className="px-3 py-3 text-right">
         <div className="flex justify-end gap-1.5">
-          <Link href={`/aop/${emp.id}`}>
+          <Link href={`/aop/${encodeURIComponent(emp.id)}`}>
             <Button size="sm" variant={canEdit && !readOnly ? "primary" : "outline"}>
               {isRollup ? "View" : canEdit && !readOnly ? "Open" : "View"}
             </Button>

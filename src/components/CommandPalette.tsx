@@ -61,7 +61,7 @@ export function CommandPalette() {
         title: u.name,
         sub: `${u.role} · ${u.employeeCode} · ${districtNames(u.districtIds) || "—"}`,
         group: "Open AOP",
-        run: () => router.push(`/aop/${u.id}`),
+        run: () => router.push(`/aop/${encodeURIComponent(u.id)}`),
       });
     });
 
