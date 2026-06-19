@@ -114,13 +114,10 @@ export interface RevenueTargets {
   targetRevenuePerSchool: number;
 }
 
+// Live categories are A/B/C/D/Uncategorized/Chain (from school_category data);
+// mock mode may still use its own labels, so this is a plain string.
 export interface SchoolCategoryPlan {
-  category:
-    | "Chain Schools"
-    | "Premium Schools"
-    | "Category A"
-    | "Category B"
-    | "Category C";
+  category: string;
   currentCount: number;
   targetCount: number;
   projectedRevenue: number;
@@ -136,6 +133,7 @@ export interface UniversePlanning {
   activeSchoolAdditionPlan: number;
   newSchoolAcquisitionPlan: number;
   retentionPlan: number;
+  retentionPlanValue?: number; // INR amount the ZM commits to retain
   keyAccountPlan: string;
   chainSchoolExpansionPlan: string;
   premiumSchoolStrategy: string;

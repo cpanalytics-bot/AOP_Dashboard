@@ -6,17 +6,10 @@ import { useStore } from "@/lib/store";
 import { Badge, Button, Card, Field, TextInput } from "@/components/ui";
 import { supabaseConfigured } from "@/lib/supabase/client";
 
-const DEMO_EMAILS = [
-  { email: "admin@org.com", role: "ADMIN" },
-  { email: "anita.rao@org.com", role: "ZDM" },
-  { email: "rohit.mehra@org.com", role: "BDM" },
-  { email: "karan.singh@org.com", role: "BDA" },
-];
-
 export default function LoginPage() {
   const { login, currentUser } = useStore();
   const router = useRouter();
-  const [email, setEmail] = useState("anita.rao@org.com");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -26,9 +19,9 @@ export default function LoginPage() {
     else router.replace("/view");
   }, [currentUser, router]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError("");
-    const ok = login(email);
+    const ok = await login(email);
     if (!ok) {
       setError("Email not found. Use a registered email from the list below.");
       return;
@@ -68,23 +61,6 @@ export default function LoginPage() {
           <Button className="w-full" onClick={handleLogin}>
             Sign in
           </Button>
-        </div>
-
-        <div className="mt-5 border-t border-gray-100 pt-4">
-          <p className="t-overline mb-2">Demo accounts</p>
-          <div className="space-y-1.5">
-            {DEMO_EMAILS.map((d) => (
-              <button
-                key={d.email}
-                type="button"
-                onClick={() => setEmail(d.email)}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-[13px] hover:bg-gray-50"
-              >
-                <span className="text-gray-700">{d.email}</span>
-                <Badge tone="slate">{d.role}</Badge>
-              </button>
-            ))}
-          </div>
         </div>
       </Card>
     </div>

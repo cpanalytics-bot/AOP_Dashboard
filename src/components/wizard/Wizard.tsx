@@ -254,7 +254,7 @@ export function Wizard({ employeeId }: { employeeId: string }) {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <button
-            onClick={() => router.push(currentUser?.role === "ZDM" ? "/" : "/view")}
+            onClick={() => router.push(currentUser?.role === "ZDM" ? "/" : currentUser?.role === "ADMIN" ? "/admin" : "/view")}
             className="t-caption mb-1 inline-flex items-center gap-1 hover:text-gray-700"
           >
             &larr; Back to dashboard

@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -23,8 +24,13 @@ import {
   users as seedUsers,
 } from "./mock-data";
 import { aggregateTeamAop } from "./calc";
+import { supabaseConfigured } from "./supabase/client";
+import * as live from "./supabase/aop-data";
 
 const LS_KEY = "aop-platform-state-v2";
+const LIVE = supabaseConfigured;
+// In live mode we persist only the signed-in email and re-hydrate from Supabase.
+const LIVE_EMAIL_KEY = "aop-live-email";
 
 interface PersistedState {
   currentUserId: string | null;
@@ -37,9 +43,12 @@ interface PersistedState {
 interface StoreContextValue {
   currentUser: User | null;
   users: User[];
-  login: (email: string) => boolean;
+  login: (email: string) => Promise<boolean>;
   loginById: (userId: string) => void;
   logout: () => void;
+  hydrating: boolean;
+  listZms: () => Promise<{ email: string; name: string }[]>;
+  loadZmContext: (zmEmail: string) => Promise<void>;
 
   subordinates: (userId: string) => User[];
   visibleEmployees: () => User[];
@@ -73,6 +82,10 @@ interface StoreContextValue {
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 function loadState(): PersistedState {
+  // Live mode starts empty; data is hydrated from Supabase on login.
+  if (LIVE) {
+    return { currentUserId: null, aops: {}, hiring: [], users: [], auditLogs: [] };
+  }
   if (typeof window !== "undefined") {
     try {
       const raw = window.localStorage.getItem(LS_KEY);
@@ -106,14 +119,44 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     auditLogs: [],
   });
   const [hydrated, setHydrated] = useState(false);
+  const [hydrating, setHydrating] = useState(false);
+  // Live submission context (one aop_master per ZM per FY).
+  const aopMeta = useRef<{ aopId: string | null; zmEmail: string | null }>({ aopId: null, zmEmail: null });
 
-  useEffect(() => {
-    setState(loadState());
-    setHydrated(true);
+  // Pull the full team + AOP bundle for a signed-in ZM (or Program Team) from Supabase.
+  const hydrateLive = useCallback(async (user: User) => {
+    setHydrating(true);
+    try {
+      // Program Team (ADMIN) has no single zone; they open individual ZM plans on demand.
+      const zmEmail = user.email;
+      const { aopId, status } = await live.ensureMaster(zmEmail);
+      aopMeta.current = { aopId, zmEmail };
+      const team = user.role === "ZDM" ? await live.liveTeam(user.email) : [];
+      const roster = [user, ...team.filter((m) => m.email !== user.email)];
+      const aops = await live.liveLoadBundle(aopId, status, roster);
+      const hiring = await live.liveLoadHiring(aopId);
+      setState((s) => ({ ...s, users: roster, aops, hiring, currentUserId: user.id }));
+    } finally {
+      setHydrating(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (LIVE) {
+      // Re-hydrate the last signed-in user on refresh.
+      const email = typeof window !== "undefined" ? window.localStorage.getItem(LIVE_EMAIL_KEY) : null;
+      setHydrated(true);
+      if (email) {
+        live.liveLogin(email).then((u) => { if (u) void hydrateLive(u); });
+      }
+      return;
+    }
+    setState(loadState());
+    setHydrated(true);
+  }, [hydrateLive]);
+
+  useEffect(() => {
+    if (!hydrated || LIVE) return; // live mode does not persist full state to localStorage
     try {
       window.localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch {
@@ -150,16 +193,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(
-    (email: string): boolean => {
+    async (email: string): Promise<boolean> => {
+      if (LIVE) {
+        const u = await live.liveLogin(email);
+        if (!u) return false;
+        if (typeof window !== "undefined") window.localStorage.setItem(LIVE_EMAIL_KEY, u.email);
+        await hydrateLive(u);
+        return true;
+      }
       const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
       if (!u || u.isActive === false) return false;
       loginById(u.id);
       return true;
     },
-    [users, loginById],
+    [users, loginById, hydrateLive],
   );
 
   const logout = useCallback(() => {
+    if (LIVE && typeof window !== "undefined") window.localStorage.removeItem(LIVE_EMAIL_KEY);
+    aopMeta.current = { aopId: null, zmEmail: null };
     setState((s) => ({ ...s, currentUserId: null }));
   }, []);
 
@@ -235,7 +287,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (targetUserId: string) => {
       if (!currentUser) return false;
       if (targetUserId === currentUser.id) return false;
-      if (currentUser.role === "ADMIN" || currentUser.role === "ZDM") {
+      // Program Team (ADMIN) can approve any submission they're reviewing.
+      if (currentUser.role === "ADMIN") return true;
+      if (currentUser.role === "ZDM") {
         return subordinates(currentUser.id).some((u) => u.id === targetUserId);
       }
       return false;
@@ -289,6 +343,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           },
         },
       }));
+      if (LIVE && aopMeta.current.aopId && aopMeta.current.zmEmail) {
+        void live.liveSaveAop(aopMeta.current.aopId, aopMeta.current.zmEmail, aop);
+      }
       addAudit({
         tableName: "aop_master",
         recordId: aop.id,
@@ -359,8 +416,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           ].slice(0, 500),
         };
       });
+      if (LIVE && aopMeta.current.aopId) {
+        void live.liveRecordApproval(aopMeta.current.aopId, action, currentUser?.email ?? "", comment);
+      }
     },
-    [],
+    [currentUser],
   );
 
   const updateUserProfile = useCallback(
@@ -369,6 +429,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...s,
         users: s.users.map((u) => (u.id === userId ? { ...u, ...patch } : u)),
       }));
+      if (LIVE && aopMeta.current.aopId && aopMeta.current.zmEmail) {
+        const target = users.find((u) => u.id === userId);
+        void live.liveUpdateProfile(
+          aopMeta.current.aopId, aopMeta.current.zmEmail, userId,
+          patch.baseLocation ?? target?.baseLocation ?? "",
+          patch.districtIds ?? target?.districtIds ?? [],
+        );
+      }
       addAudit({
         tableName: "users",
         recordId: userId,
@@ -377,11 +445,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         diff: patch as Record<string, unknown>,
       });
     },
-    [addAudit, state.currentUserId],
+    [addAudit, state.currentUserId, users],
   );
 
   const addHiring = useCallback(
     (req: Omit<HiringRequest, "id" | "createdAt" | "requestedByUserId" | "status">) => {
+      if (LIVE && aopMeta.current.aopId && aopMeta.current.zmEmail) {
+        void live
+          .liveAddHiring(aopMeta.current.aopId, aopMeta.current.zmEmail, req)
+          .then((row) => { if (row) setState((s) => ({ ...s, hiring: [row, ...s.hiring] })); });
+        return;
+      }
       setState((s) => ({
         ...s,
         hiring: [
@@ -405,9 +479,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...s,
         hiring: s.hiring.map((h) => (h.id === id ? { ...h, status } : h)),
       }));
+      if (LIVE) void live.liveUpdateHiringStatus(id, status);
     },
     [],
   );
+
+  // Program Team: list every ZM, and load a chosen ZM's whole submission for review.
+  const listZms = useCallback(async (): Promise<{ email: string; name: string }[]> => {
+    if (LIVE) {
+      const z = await live.liveListZms();
+      return z.map((x) => ({ email: x.email, name: x.name }));
+    }
+    return users.filter((u) => u.role === "ZDM").map((u) => ({ email: u.email, name: u.name }));
+  }, [users]);
+
+  const loadZmContext = useCallback(async (zmEmail: string) => {
+    if (!LIVE) return;
+    setHydrating(true);
+    try {
+      const { aopId, status } = await live.ensureMaster(zmEmail);
+      aopMeta.current = { aopId, zmEmail };
+      const team = await live.liveTeam(zmEmail);
+      const aops = await live.liveLoadBundle(aopId, status, team);
+      const hiring = await live.liveLoadHiring(aopId);
+      setState((s) => {
+        const admin = s.users.find((u) => u.id === s.currentUserId);
+        const roster = admin ? [admin, ...team.filter((m) => m.id !== admin.id)] : team;
+        return { ...s, users: roster, aops, hiring };
+      });
+    } finally {
+      setHydrating(false);
+    }
+  }, []);
 
   const value: StoreContextValue = {
     currentUser,
@@ -415,6 +518,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     login,
     loginById,
     logout,
+    hydrating,
+    listZms,
+    loadZmContext,
     subordinates,
     visibleEmployees,
     canEditAop,

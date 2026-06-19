@@ -9,7 +9,6 @@ import {
   Field,
   NumberInput,
   Stat,
-  TextArea,
 } from "@/components/ui";
 import {
   collectionPhasingForZone,
@@ -162,7 +161,14 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
   const set = (field: keyof typeof u, v: number | string | boolean) =>
     patch("universe", { [field]: v } as never);
   const setCat = (idx: number, field: string, v: number) => {
-    const categories = u.categories.map((c, i) => (i === idx ? { ...c, [field]: v } : c));
+    const aov = aop.revenue.currentAov;
+    const categories = u.categories.map((c, i) => {
+      if (i !== idx) return c;
+      const next = { ...c, [field]: v };
+      // Exp. revenue is auto: target count × conversion % × current AOV.
+      next.projectedRevenue = Math.round(next.targetCount * (next.projectedConversion / 100) * aov);
+      return next;
+    });
     patch("universe", { categories });
   };
 
@@ -190,9 +196,9 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
           {u.categories.map((c, idx) => (
             <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-5">
               <div className="col-span-2 self-center text-[13px] font-medium text-gray-900 sm:col-span-1">{c.category}</div>
-              <NumberInput value={c.currentCount} onChange={(v) => setCat(idx, "currentCount", v)} disabled={readOnly} />
+              <NumberInput value={c.currentCount} onChange={() => {}} disabled />
               <NumberInput value={c.targetCount} onChange={(v) => setCat(idx, "targetCount", v)} disabled={readOnly} />
-              <NumberInput value={c.projectedRevenue} onChange={(v) => setCat(idx, "projectedRevenue", v)} disabled={readOnly} />
+              <div className="self-center px-1 text-[13px] tabular-nums text-gray-700">{fmtINR(c.projectedRevenue)}</div>
               <NumberInput value={c.projectedConversion} onChange={(v) => setCat(idx, "projectedConversion", v)} disabled={readOnly} />
             </div>
           ))}
@@ -207,24 +213,15 @@ export function UniverseStage({ aop, patch, readOnly }: StageProps) {
 
       <Card>
         <h3 className="mb-4 t-card-heading">Growth plans</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Active school addition plan" note="How many sleeping schools you will wake up this year.">
-            <NumberInput value={u.activeSchoolAdditionPlan} onChange={(v) => set("activeSchoolAdditionPlan", v)} disabled={readOnly} />
-          </Field>
-          <Field label="New school acquisition plan" note="How many brand-new schools you will win.">
-            <NumberInput value={u.newSchoolAcquisitionPlan} onChange={(v) => set("newSchoolAcquisitionPlan", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Retention plan %" note="Out of 100 current schools, how many you will keep. Pre-filled to 85.">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Retention plan %" note="Out of 100 current schools, how many you will keep.">
             <NumberInput value={u.retentionPlan} onChange={(v) => set("retentionPlan", v)} disabled={readOnly} />
+          </Field>
+          <Field label="Retention plan value" hint="INR" note="Revenue you commit to retain this year.">
+            <NumberInput value={u.retentionPlanValue ?? 0} onChange={(v) => set("retentionPlanValue", v)} disabled={readOnly} />
           </Field>
           <Field label="Bulk deal opportunities" note="Number of big one-time orders you can chase.">
             <NumberInput value={u.bulkDealOpportunities} onChange={(v) => set("bulkDealOpportunities", v)} disabled={readOnly} />
-          </Field>
-          <Field label="Key account plan" note="In one line: how you will grow your most important schools.">
-            <TextArea value={u.keyAccountPlan} onChange={(e) => set("keyAccountPlan", e.target.value)} disabled={readOnly} />
-          </Field>
-          <Field label="Chain school expansion plan" note="How you will grow within school chains.">
-            <TextArea value={u.chainSchoolExpansionPlan} onChange={(e) => set("chainSchoolExpansionPlan", e.target.value)} disabled={readOnly} />
           </Field>
         </div>
       </Card>

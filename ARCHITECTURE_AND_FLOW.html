@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AOP Platform — Architecture & Flow</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2430; line-height: 1.55; font-size: 13px;
+    max-width: 880px; margin: 0 auto; padding: 8px 0;
+  }
+  h1 { font-size: 26px; border-bottom: 3px solid #4f46e5; padding-bottom: 8px; margin-top: 28px; color: #312e81; }
+  h2 { font-size: 19px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-top: 30px; color: #3730a3; page-break-after: avoid; }
+  h3 { font-size: 15px; margin-top: 20px; color: #4338ca; page-break-after: avoid; }
+  h4 { font-size: 13.5px; margin-top: 16px; color: #4b5563; }
+  p, li { font-size: 13px; }
+  a { color: #4f46e5; text-decoration: none; }
+  code { background: #f3f4f6; padding: 1.5px 5px; border-radius: 4px; font-size: 12px;
+         font-family: "Cascadia Code", "Consolas", monospace; color: #be123c; }
+  pre { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; font-size: 11.5px; line-height: 1.45; page-break-inside: avoid; }
+  pre code { background: none; color: #0f172a; padding: 0; }
+  blockquote { border-left: 4px solid #c7d2fe; background: #eef2ff; margin: 14px 0;
+               padding: 8px 14px; color: #3730a3; border-radius: 0 6px 6px 0; }
+  blockquote p { font-size: 12.5px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 11.5px; page-break-inside: avoid; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef2ff; color: #312e81; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafafc; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 26px 0; }
+  .mermaid-src { background: #f5f3ff; border-color: #ddd6fe; color: #4338ca; }
+  .mermaid-src b { color: #6d28d9; display: block; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  strong { color: #111827; }
+</style>
+</head>
+<body>
+<h1>AOP Platform FY26-27 — Architecture, Full Flow &amp; Database Reference</h1>
+<blockquote>
+<p>A single reference document covering <strong>what the system does</strong>, <strong>how it is built</strong>,
+<strong>the end‑to‑end flow</strong>, and <strong>every database table</strong> (existing + the ones you still
+need to create). Use this as the hand‑off / build reference.</p>
+</blockquote>
+<hr>
+<h2>1. What this product is</h2>
+<p>A <strong>mobile-first web platform</strong> for building the <strong>Annual Operating Plan (AOP)</strong> of a
+nationwide field‑sales organisation that sells educational products to schools.</p>
+<p>The org is a 4-level hierarchy:</p>
+<pre><code>ADMIN  →  ZDM (Zone)  →  BDM (District line)  →  BDA (own territory)
+</code></pre>
+<p>Each field employee builds <strong>one AOP per fiscal year (FY26-27)</strong> through a guided
+<strong>7-stage wizard</strong> with live calculations, then the plan flows through an
+<strong>approval workflow</strong> (submit → review → approve / request changes / reject).
+ZDMs see a <strong>zone roll-up</strong> (auto-aggregated from all team members) and a
+<strong>leadership dashboard</strong>.</p>
+<hr>
+<h2>2. Technology architecture</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Framework</td>
+<td><strong>Next.js 15</strong> (App Router) + React 19</td>
+<td><code>src/app/*</code> routes</td>
+</tr>
+<tr>
+<td>Language</td>
+<td><strong>TypeScript</strong></td>
+<td>Domain types in <code>src/lib/types.ts</code></td>
+</tr>
+<tr>
+<td>Styling</td>
+<td><strong>Tailwind CSS v4</strong> + PostCSS</td>
+<td><code>src/app/globals.css</code></td>
+</tr>
+<tr>
+<td>Validation</td>
+<td><strong>Zod</strong></td>
+<td><code>src/lib/validation.ts</code> (per-stage schemas)</td>
+</tr>
+<tr>
+<td>Backend (optional)</td>
+<td><strong>Supabase</strong> (Postgres + Auth + RLS)</td>
+<td><code>supabase/migrations/*</code></td>
+</tr>
+<tr>
+<td>State (demo)</td>
+<td>React Context + <code>localStorage</code></td>
+<td><code>src/lib/store.tsx</code></td>
+</tr>
+</tbody></table>
+<h3>2.1 Two run modes</h3>
+<p>The app is designed to run <strong>with or without a backend</strong>:</p>
+<pre><code>┌─────────────────────────── DEMO / MOCK MODE (default) ───────────────────────────┐
+│  No env vars set.  Data = seeded in-memory (mock-data.ts) + localStorage drafts.  │
+│  Auth = quick-login persona switch.  Calc engine = lib/calc.ts.                    │
+└───────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────── LIVE / SUPABASE MODE (optional) ──────────────────────┐
+│  NEXT_PUBLIC_SUPABASE_URL + ANON_KEY set.  Data = Postgres (18+ tables).           │
+│  Auth = Supabase Auth.  Security = Row-Level Security.  KPIs = SQL view v_aop_kpis. │
+└───────────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The same formulas exist in <strong>two mirrored places</strong>: <code>lib/calc.ts</code> (TypeScript, demo)
+and the SQL view <code>v_aop_kpis</code> (Postgres, live). Keep them in sync.</p>
+<h3>2.2 Code map</h3>
+<pre><code>src/
+  app/                 # Routes
+    login/             #   persona / Supabase login
+    page.tsx (/)       #   employee card list (home)
+    view/              #   BDA&#39;s own-plan view
+    aop/[employeeId]/  #   THE 7-STAGE WIZARD
+    dashboard/         #   team comparison + ZDM rollup
+    hiring/            #   hiring requests
+    admin/             #   admin console
+  components/
+    AppShell.tsx       # nav shell
+    wizard/
+      Wizard.tsx       # stepper, state machine, submit/approve actions
+      stages.tsx       # Stage 2-7 UI (Revenue…Collection)
+    HiringForm.tsx, EmployeeProfile.tsx, TeamCommandCenter.tsx, ui.tsx …
+  lib/
+    types.ts           # domain types (mirror of DB)
+    calc.ts            # calculation engine (mirrors v_aop_kpis)
+    validation.ts      # Zod schemas + cross-field flags
+    store.tsx          # auth, data, RBAC permissions, persistence
+    master-data.ts     # zones / districts lookup
+    mock-data.ts       # demo seed (mirrors seed.sql)
+    supabase/          # browser + server clients (live mode)
+supabase/
+  migrations/0001_schema.sql            # 18 core tables + v_aop_kpis
+  migrations/0002_rls.sql               # RLS policies + triggers
+  migrations/0003_enterprise_redesign.sql  # zones/districts/blocks, ADMIN, rollup view
+  seed.sql                              # demo data
+docs/                  # 15-section product/design spec
+documentation/database-mapping/        # field/KPI/table discovery CSVs + xlsx
+</code></pre>
+<hr>
+<h2>3. Roles &amp; access control (RBAC)</h2>
+<p>Permissions are enforced in <code>store.tsx</code> (demo) and by RLS policies (live).</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th align="center">ADMIN</th>
+<th align="center">ZDM</th>
+<th align="center">BDM</th>
+<th align="center">BDA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>See everyone</td>
+<td align="center">✅</td>
+<td align="center">zone only</td>
+<td align="center">own line</td>
+<td align="center">self only</td>
+</tr>
+<tr>
+<td>View an AOP</td>
+<td align="center">any</td>
+<td align="center">subordinates + self</td>
+<td align="center">subordinates + self</td>
+<td align="center">self</td>
+</tr>
+<tr>
+<td><strong>Edit</strong> an AOP</td>
+<td align="center">any</td>
+<td align="center">subordinates¹</td>
+<td align="center">❌</td>
+<td align="center">❌²</td>
+</tr>
+<tr>
+<td>Approve / reject AOP</td>
+<td align="center">subordinates</td>
+<td align="center">subordinates</td>
+<td align="center">❌</td>
+<td align="center">❌</td>
+</tr>
+<tr>
+<td>Edit employee profile</td>
+<td align="center">any</td>
+<td align="center">subordinates</td>
+<td align="center">❌</td>
+<td align="center">❌</td>
+</tr>
+<tr>
+<td>Raise hiring request</td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">❌</td>
+<td align="center">❌</td>
+</tr>
+<tr>
+<td>Manage hiring status</td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">❌</td>
+<td align="center">❌</td>
+</tr>
+</tbody></table>
+<p>¹ In the <strong>enterprise redesign</strong> (<code>0003</code>), planning data is <strong>writable only by ZDM/ADMIN</strong>
+(<code>can_edit_user()</code>), with BDM/BDA as read/own-view. The demo store reflects the same rule
+(<code>canEditAop</code> returns true only for ADMIN, or ZDM over subordinates).
+² A ZDM&#39;s own &quot;AOP&quot; is the <strong>roll-up</strong> (<code>isRollup</code>) — read-only, never directly editable.</p>
+<p><strong>Visibility</strong> is computed by walking the <code>reporting_manager_id</code> tree
+(<code>subordinates()</code> / <code>employee_hierarchy</code> closure table in SQL).</p>
+<hr>
+<h2>4. End-to-end flow</h2>
+<h3>4.1 Navigation flow</h3>
+<pre><code>/login ──(pick persona / sign in)──► /  (employee cards)
+                                      │
+        ┌─────────────────────────────┼──────────────────────────────┐
+        ▼                             ▼                              ▼
+  /aop/[employeeId]            /dashboard                       /hiring
+  (7-stage wizard)        (team compare + ZDM rollup)      (hiring requests)
+        │
+        └─► Submit ─► manager opens same wizard ─► Approve / Request changes / Reject
+</code></pre>
+<h3>4.2 The AOP wizard — 8 steps</h3>
+<p>Defined in <code>Wizard.tsx → STAGES</code>. Steps map to data sections on the <code>Aop</code> object and
+to DB tables.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step (UI)</th>
+<th>Purpose</th>
+<th>Writes to (section / table)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>Hiring</strong></td>
+<td>Identify manpower gaps before planning; smart-defaults launcher</td>
+<td><code>hiring_requests</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Revenue</strong></td>
+<td>Total + 5 category targets, AOV; auto-split by last-year mix</td>
+<td><code>revenue.*</code> → <code>revenue_targets</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Universe</strong></td>
+<td>School counts, 5 category rows, growth/retention plans</td>
+<td><code>universe.*</code> → <code>universe_planning</code>, <code>school_categories</code>, <code>distributor_planning</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Sampling</strong></td>
+<td>Free-trial volumes + conversion assumptions</td>
+<td><code>sampling.*</code> → <code>sampling_planning</code>, <code>conversion_planning</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Training</strong></td>
+<td>Trainings &amp; workshops counts</td>
+<td><code>training.*</code> → <code>training_planning</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Cost</strong> (Investment)</td>
+<td>All planned spend across 12 cost heads</td>
+<td><code>investment.*</code> → <code>investment_planning</code></td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Collection</strong></td>
+<td>Auto cash-collection plan by region × milestone (no input)</td>
+<td><code>collection.*</code> → <code>collection_planning</code>*</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Review</strong></td>
+<td>Auto KPIs, validation flags, summary, <strong>Submit / Approve</strong></td>
+<td><code>approval_workflow</code>, <code>aop_master.status</code></td>
+</tr>
+</tbody></table>
+<p>* <code>collection_planning</code> is a <strong>proposed</strong> table — today the collection step is computed
+in code from region constants (see §7).</p>
+<h3>4.3 Per-step behaviour highlights</h3>
+<ul>
+<li><strong>Live calculations</strong>: every numeric input recomputes KPI strips instantly
+(<code>computeRevenueKpis</code>, <code>computeUniverseKpis</code>, <code>computeSamplingKpis</code>,
+<code>computeInvestmentKpis</code>, <code>computeAopKpis</code>).</li>
+<li><strong>Auto-split</strong> (Revenue): distributes the total target across the 5 categories using
+last year&#39;s revenue mix.</li>
+<li><strong>Smart defaults</strong> (Hiring step): pre-fills the whole plan from last-year revenue × 1.12
+growth.</li>
+<li><strong>Validation gate</strong>: <code>goNext()</code> runs the stage&#39;s Zod schema; the stepper dot turns
+green (valid) / red (invalid) / grey (untouched).</li>
+<li><strong>Read-only / locked</strong>: AOPs in <code>submitted | in_review | approved</code> are locked; roll-ups
+are always read-only.</li>
+<li><strong>Collection</strong> is fully derived (region collection % × milestone phasing × revenue
+target) — nothing is typed.</li>
+</ul>
+<h3>4.4 AOP status state machine</h3>
+<pre><code>not_started ──(first save)──► draft ──(submit)──► submitted ──► in_review
+                                 ▲                                   │
+                                 │                          ┌────────┼─────────┐
+                                 │                          ▼        ▼         ▼
+                          changes_requested ◄──────── request_changes  approve  reject
+                                                                       │        │
+                                                                       ▼        ▼
+                                                                   approved   rejected
+</code></pre>
+<p>Type: <code>AopStatus</code> in <code>types.ts</code>. Transitions are recorded as <code>approval_workflow</code> events
+(<code>submit | approve | reject | request_changes</code>) plus an <code>audit_logs</code> row.</p>
+<h3>4.5 Approval workflow</h3>
+<ol>
+<li><strong>Editor</strong> (ZDM/ADMIN) completes wizard → <strong>Submit</strong> → status <code>submitted</code>, event logged,
+plan <strong>locks</strong>, confetti, redirect home.</li>
+<li><strong>Approver</strong> (manager) opens the same wizard → <strong>Review</strong> step shows
+<strong>Approve / Request changes / Reject</strong> with a comment box.</li>
+<li>Action sets status and appends an <code>approval_workflow</code> event + <code>audit_logs</code> entry.
+<code>request_changes</code> reopens the plan for the owner.</li>
+</ol>
+<h3>4.6 ZDM roll-up</h3>
+<p>A ZDM has no editable plan of their own. <code>getAop(zdmId)</code> calls
+<code>aggregateTeamAop(teamAops, zdmId, zoneId)</code> which <strong>sums</strong> revenue, universe, sampling,
+training, investment across all descendants and <strong>derives</strong> a combined status
+(<code>deriveRollupStatus</code>). In live mode this is the <code>v_zdm_rollup_aop</code> SQL view.</p>
+<hr>
+<h2>5. Calculation engine (KPIs)</h2>
+<p>Pure functions in <code>lib/calc.ts</code>, mirrored by the SQL view <code>v_aop_kpis</code>.</p>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>Formula</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Revenue growth %</td>
+<td><code>(total_target − last_year) / last_year × 100</code></td>
+</tr>
+<tr>
+<td>AOV growth %</td>
+<td><code>(target_aov − current_aov) / current_aov × 100</code></td>
+</tr>
+<tr>
+<td>Category mismatch</td>
+<td><code>total_target − Σ(5 category targets)</code> (must be 0)</td>
+</tr>
+<tr>
+<td>School growth %</td>
+<td><code>(Σ target_count − Σ current_count) / Σ current_count × 100</code></td>
+</tr>
+<tr>
+<td>Total samples</td>
+<td><code>Σ(7 sampling streams)</code></td>
+</tr>
+<tr>
+<td>Unique schools</td>
+<td><code>total_samples × unique_factor</code></td>
+</tr>
+<tr>
+<td>Cost / conversion</td>
+<td><code>sampling_cost / estimated_conversions</code></td>
+</tr>
+<tr>
+<td>Total investment</td>
+<td><code>Σ(12 cost heads)</code></td>
+</tr>
+<tr>
+<td>Investment % of revenue</td>
+<td><code>total_investment / total_target × 100</code></td>
+</tr>
+<tr>
+<td>ROI</td>
+<td><code>total_target / total_investment</code></td>
+</tr>
+<tr>
+<td>Collection target</td>
+<td><code>total_target × region_collection_% / 100</code></td>
+</tr>
+<tr>
+<td>Milestone amount</td>
+<td><code>total_target × cumulative_% / 100</code></td>
+</tr>
+</tbody></table>
+<p><strong>Validation flags</strong> (<code>flagUnrealisticTargets</code>): category sum mismatch (error),
+growth &gt; 60 % (warn), negative growth (warn), implied rev/school ≫ AOV (warn),
+sampling-to-new-schools &gt; available non-user schools (error).</p>
+<hr>
+<h2>6. DATABASE REFERENCE — existing tables</h2>
+<blockquote>
+<p>PostgreSQL / Supabase. UUID PKs (<code>gen_random_uuid()</code>), <code>numeric(14,2)</code> for INR money,
+<code>numeric(5,2)</code> for percentages, <code>created_at/updated_at timestamptz</code>.
+Source: <code>supabase/migrations/0001_schema.sql</code> (core) + <code>0003_enterprise_redesign.sql</code>.</p>
+</blockquote>
+<h3>6.1 Core schema — 18 tables (migration 0001)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Table</th>
+<th>Grain</th>
+<th>Key columns</th>
+<th>Relationships</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>territories</strong></td>
+<td>one per territory</td>
+<td><code>code</code>, <code>name</code>, <code>district</code>, <code>state</code>, <code>zone</code>, <code>base_location</code></td>
+<td>referenced by <code>users</code>, <code>hiring_requests</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>users</strong></td>
+<td>one per employee (1:1 <code>auth.users</code>)</td>
+<td><code>employee_code</code>, <code>role</code> (ZDM/BDM/BDA/ADMIN), <code>reporting_manager_id</code>, <code>territory_id</code>, <code>current_revenue/target</code></td>
+<td>self-FK manager; → territories</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>employee_hierarchy</strong></td>
+<td>closure table</td>
+<td><code>ancestor_id</code>, <code>descendant_id</code>, <code>depth</code></td>
+<td>fast subtree queries over users</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>aop_master</strong></td>
+<td>one per user per FY</td>
+<td><code>user_id</code>, <code>fy</code>, <code>status</code>, <code>version</code>, <code>submitted_at</code>, <code>approved_at</code> · unique(user_id, fy)</td>
+<td>root of all stage tables</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>revenue_targets</strong></td>
+<td>1:1 aop</td>
+<td>LY revenue + 5 LY categories, AOV, total + 5 category targets · generated <code>revenue_growth_pct</code>, <code>category_sum_target</code></td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>universe_planning</strong></td>
+<td>1:1 aop</td>
+<td>school counts, addition/acquisition/retention plans, text strategies</td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>school_categories</strong></td>
+<td>5 rows per aop</td>
+<td><code>category</code> enum, <code>current_count</code>, <code>target_count</code>, <code>projected_revenue</code>, <code>projected_conversion</code> · unique(aop_id, category)</td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>distributor_planning</strong></td>
+<td>1:1 aop</td>
+<td>existing/new distributor, bulk &amp; institutional opportunities</td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>sampling_planning</strong></td>
+<td>1:1 aop</td>
+<td>7 sampling streams, cost_per_sample, unique_factor · generated <code>total_sampling_schools</code></td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>conversion_planning</strong></td>
+<td>1:1 aop</td>
+<td>user/non-user conversion %, sampling→revenue/orders/new-schools</td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>training_planning</strong></td>
+<td>1:1 aop</td>
+<td>8 training/workshop counts, cost, participants · generated <code>total_trainings</code></td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>investment_planning</strong></td>
+<td>1:1 aop</td>
+<td>12 cost heads · generated <code>total_investment</code></td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>hiring_requests</strong></td>
+<td>one per request</td>
+<td>requester, territory, designation, positions, priority, reason, justification, status</td>
+<td>→ users, territories</td>
+</tr>
+<tr>
+<td>14</td>
+<td><strong>approval_workflow</strong></td>
+<td>event log per aop</td>
+<td><code>action</code> (submit/approve/reject/request_changes), <code>by_user_id</code>, <code>comment</code></td>
+<td>→ aop_master, users</td>
+</tr>
+<tr>
+<td>15</td>
+<td><strong>audit_logs</strong></td>
+<td>generic change log</td>
+<td><code>table_name</code>, <code>record_id</code>, <code>action</code>, <code>changed_by</code>, <code>diff</code> (jsonb)</td>
+<td>→ users</td>
+</tr>
+<tr>
+<td>16</td>
+<td><strong>actuals_tracking</strong></td>
+<td>one per user/FY/month</td>
+<td><code>revenue_actual</code>, schools, samples, conversions, spend · unique(user_id, fy, month)</td>
+<td>→ users</td>
+</tr>
+<tr>
+<td>17</td>
+<td><strong>monthly_reviews</strong></td>
+<td>one per aop/month</td>
+<td>plan vs actual, <code>variance_pct</code>, notes</td>
+<td>→ aop_master</td>
+</tr>
+<tr>
+<td>18</td>
+<td><strong>quarterly_reviews</strong></td>
+<td>one per aop/quarter</td>
+<td>plan vs actual, <code>variance_pct</code>, <code>rag_status</code></td>
+<td>→ aop_master</td>
+</tr>
+</tbody></table>
+<p>Plus <strong>view <code>v_aop_kpis</code></strong> — joins aop_master + revenue + universe + investment + sampling +
+training to expose consolidated KPIs to dashboards.</p>
+<h3>6.2 Enterprise redesign — additional tables (migration 0003)</h3>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Grain</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>zones</strong></td>
+<td>one per zone</td>
+<td><code>code</code>, <code>name</code>, <code>collection_percent</code> (region collection policy)</td>
+</tr>
+<tr>
+<td><strong>districts</strong></td>
+<td>one per district</td>
+<td><code>code</code>, <code>name</code>, <code>state</code>, <code>zone_id</code> → zones</td>
+</tr>
+<tr>
+<td><strong>blocks</strong></td>
+<td>one per block</td>
+<td><code>code</code>, <code>name</code>, <code>district_id</code> → districts</td>
+</tr>
+<tr>
+<td><strong>employee_districts</strong></td>
+<td>M:N</td>
+<td>maps <code>user_id</code> ↔ <code>district_id</code> (multi-district coverage)</td>
+</tr>
+<tr>
+<td><strong>hiring_districts</strong></td>
+<td>M:N</td>
+<td>maps <code>hiring_request_id</code> ↔ <code>district_id</code></td>
+</tr>
+</tbody></table>
+<p>Also adds: <code>role_t</code> enum value <code>ADMIN</code>; <code>users.zone_id</code>; <code>hiring_requests.for_user_id</code>;
+view <strong><code>v_zdm_rollup_aop</code></strong> (aggregated zone AOP); function <strong><code>can_edit_user()</code></strong>
+(ZDM/ADMIN-only write).</p>
+<h3>6.3 Enum types</h3>
+<p><code>role_t</code> (ZDM/BDM/BDA/ADMIN) · <code>aop_status_t</code> · <code>hiring_status_t</code> · <code>hiring_priority_t</code> ·
+<code>hiring_reason_t</code> · <code>approval_action_t</code> · <code>school_category_t</code>.</p>
+<h3>6.4 Entity relationship (core)</h3>
+<p><pre class="mermaid-src"><b>Diagram (Mermaid source)</b>
+erDiagram
+  zones ||--o{ districts : has
+  districts ||--o{ blocks : has
+  zones ||--o{ users : "zone_id"
+  territories ||--o{ users : "territory_id"
+  users ||--o{ users : "reporting_manager_id"
+  users ||--o{ employee_districts : assigned
+  districts ||--o{ employee_districts : covers
+  users ||--|| aop_master : owns
+  aop_master ||--|| revenue_targets : has
+  aop_master ||--|| universe_planning : has
+  aop_master ||--o{ school_categories : has
+  aop_master ||--|| distributor_planning : has
+  aop_master ||--|| sampling_planning : has
+  aop_master ||--|| conversion_planning : has
+  aop_master ||--|| training_planning : has
+  aop_master ||--|| investment_planning : has
+  aop_master ||--o{ approval_workflow : logs
+  aop_master ||--o{ monthly_reviews : has
+  aop_master ||--o{ quarterly_reviews : has
+  users ||--o{ hiring_requests : raises
+  hiring_requests ||--o{ hiring_districts : targets
+  users ||--o{ actuals_tracking : reports</pre></p>
+<hr>
+<h2>7. TABLES YOU STILL NEED TO CREATE (proposed)</h2>
+<p>Source: <code>documentation/database-mapping/proposed_tables.csv</code> and the gaps in the current
+schema. These are required to move from prototype → production.</p>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Table</th>
+<th>Why it&#39;s needed</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>High</strong></td>
+<td><strong>school_master</strong></td>
+<td>Universe counts, revenue-per-school, dedup and scoring all need <strong>real per-school records</strong>, not aggregate counts.</td>
+<td><strong>Create</strong> — aggregate counts cannot represent per-school facts.</td>
+</tr>
+<tr>
+<td><strong>High</strong></td>
+<td><strong>sales_actuals</strong> (or ERP view)</td>
+<td>Last-year revenue, current AOV/RPS, YTD achievement need <strong>transactional actuals</strong>, not the monthly summary.</td>
+<td><strong>Create / integrate</strong> — confirm the ERP feed; <code>actuals_tracking</code> is summary only.</td>
+</tr>
+<tr>
+<td><strong>High</strong></td>
+<td><strong>region_collection_policy</strong></td>
+<td>Collection % and milestone phasing are <strong>hard-coded in <code>calc.ts</code></strong> today; Finance must own this as data.</td>
+<td><strong>Create</strong> — move <code>REGION_COLLECTION_PCT</code> / <code>REGION_COLLECTION_PHASING</code> into a table.</td>
+</tr>
+<tr>
+<td><strong>Medium</strong></td>
+<td><strong>revenue_phasing</strong></td>
+<td>Monthly target phasing for honest monthly/quarterly variance (today it&#39;s a flat 1/12 split).</td>
+<td><strong>Create</strong> — flat split misleads reviews.</td>
+</tr>
+<tr>
+<td><strong>Medium</strong></td>
+<td><strong>collection_planning</strong></td>
+<td>Stage 7 currently only exists as a TypeScript field; nothing persists the collection % / milestones.</td>
+<td><strong>Decide</strong> — persist if region % can vary per AOP; else derive from policy.</td>
+</tr>
+<tr>
+<td><strong>Light</strong></td>
+<td><strong>fiscal_calendar</strong></td>
+<td>Defines FY / periods for phasing, YTD, current-vs-last logic (FY is hard-coded <code>FY26-27</code>).</td>
+<td><strong>Create (light)</strong> — needed once multi-FY or real YTD is required.</td>
+</tr>
+<tr>
+<td>Defer</td>
+<td><strong>category_master</strong></td>
+<td>Product categories are enums/strings today.</td>
+<td><strong>Defer</strong> — Postgres enum is fine until categories churn.</td>
+</tr>
+<tr>
+<td>Defer</td>
+<td><strong>hiring_approval</strong></td>
+<td>Only if hiring needs its own multi-step approval chain.</td>
+<td><strong>Defer</strong> — single <code>status</code> enum is sufficient for v1.</td>
+</tr>
+<tr>
+<td>Defer</td>
+<td><strong>incentive / forecast / scoring</strong></td>
+<td>Roadmap phases 3–5.</td>
+<td><strong>Defer</strong> — out of v1 scope.</td>
+</tr>
+</tbody></table>
+<h3>7.1 Suggested shape of the new high-priority tables</h3>
+<pre><code class="language-sql">-- Per-school universe (replaces aggregate counts as the source of truth)
+create table school_master (
+  id              uuid primary key default gen_random_uuid(),
+  school_code     text not null unique,
+  name            text not null,
+  district_id     uuid references districts(id),
+  block_id        uuid references blocks(id),
+  category        school_category_t,
+  is_user_school  boolean not null default false,   -- buys from us today?
+  is_active       boolean not null default true,
+  assigned_user_id uuid references users(id),        -- owning BDA
+  last_year_revenue numeric(14,2) not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+-- Transactional actuals feed (from ERP) — drives LY revenue, AOV, RPS, YTD
+create table sales_actuals (
+  id            uuid primary key default gen_random_uuid(),
+  school_id     uuid references school_master(id),
+  user_id       uuid references users(id),
+  fy            text not null,
+  period_month  date not null,
+  order_value   numeric(14,2) not null default 0,
+  category      school_category_t,
+  created_at    timestamptz not null default now()
+);
+
+-- Finance-owned collection policy (replaces hard-coded constants in calc.ts)
+create table region_collection_policy (
+  id                uuid primary key default gen_random_uuid(),
+  zone_id           uuid references zones(id),
+  fy                text not null,
+  collection_percent numeric(5,2) not null,
+  milestone_label   text not null,        -- e.g. &#39;Till Dec 2026&#39;
+  cumulative_percent numeric(5,2) not null,
+  unique (zone_id, fy, milestone_label)
+);
+
+-- Monthly target phasing (replaces flat 1/12 split)
+create table revenue_phasing (
+  id            uuid primary key default gen_random_uuid(),
+  aop_id        uuid references aop_master(id) on delete cascade,
+  period_month  date not null,
+  target_amount numeric(14,2) not null default 0,
+  unique (aop_id, period_month)
+);
+</code></pre>
+<hr>
+<h2>8. Build / run</h2>
+<pre><code class="language-bash">npm install
+npm run dev        # http://localhost:3000  (demo mode, no backend)
+</code></pre>
+<p><strong>Demo personas</strong> (quick-login): Anita Rao (ZDM) · Rohit/Sneha (BDM) ·
+Karan/Priya/Aman/Meera/Vivek (BDA). <em>Meera Joshi</em> has a pre-filled, submitted AOP to
+demo review/approval and dashboards.</p>
+<p><strong>Connect real Supabase</strong>: run <code>0001_schema.sql</code> → <code>0002_rls.sql</code> → <code>0003_enterprise_redesign.sql</code>
+→ <code>seed.sql</code>, then set <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
+in <code>.env.local</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm run dev</code></td>
+<td>Dev server</td>
+</tr>
+<tr>
+<td><code>npm run build</code></td>
+<td>Production build + type check</td>
+</tr>
+<tr>
+<td><code>npm start</code></td>
+<td>Serve production build</td>
+</tr>
+<tr>
+<td><code>npm run lint</code></td>
+<td>ESLint</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>9. Where to read more (existing docs)</h2>
+<p><code>docs/</code> holds a 15-section spec: <code>06-database-schema.md</code>, <code>07-supabase-table-design.md</code>,
+<code>08-validation-rules.md</code>, <code>09-calculation-logic.md</code>, <code>11-approval-workflow.md</code>,
+<code>12-reporting-framework.md</code>. <code>documentation/database-mapping/</code> holds the field/KPI/table
+discovery CSVs (<code>field_inventory.csv</code>, <code>kpi_inventory.csv</code>, <code>proposed_tables.csv</code>, …) and
+the <code>AOP_Data_Architecture.xlsx</code> workbook.</p>
+<pre><code>
+</code></pre>
+
+</body>
+</html>
