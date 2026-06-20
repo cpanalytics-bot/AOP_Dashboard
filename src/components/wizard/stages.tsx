@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Aop, CollectionMilestoneRow } from "@/lib/types";
+import { supabaseConfigured } from "@/lib/supabase/client";
+import { liveLastYearCollection, type LastYearCollection } from "@/lib/supabase/aop-data";
 import {
   Button,
   Card,
@@ -412,6 +414,132 @@ const MONTH_OPTIONS = [
   "Apr 2027", "May 2027", "Jun 2027",
 ];
 
+// Read-only "Last Year Collection Reference" — gives the ZM a factual basis
+// (last year's distributor commitments vs actual cash) before they set this
+// year's milestones. Data is per-employee from aop_last_year_collection().
+function LastYearCollectionRef({ email }: { email: string }) {
+  const [data, setData] = useState<LastYearCollection | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showDistributors, setShowDistributors] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    if (!supabaseConfigured || !email) { setLoading(false); return; }
+    setLoading(true);
+    liveLastYearCollection(email)
+      .then((d) => { if (alive) setData(d); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [email]);
+
+  if (!supabaseConfigured) return null;
+  if (loading) {
+    return (
+      <Card><p className="text-[13px] text-gray-400">Loading last-year collection reference…</p></Card>
+    );
+  }
+  if (!data || data.months.length === 0) {
+    return (
+      <Card>
+        <h3 className="t-card-heading">Last Year Collection Reference</h3>
+        <p className="mt-1 text-[13px] text-gray-500">
+          No distributor commitment / collection history found for this employee.
+        </p>
+      </Card>
+    );
+  }
+
+  const { totals, months, distributors } = data;
+
+  return (
+    <Card>
+      <div className="mb-3">
+        <h3 className="t-card-heading">Last Year Collection Reference</h3>
+        <p className="t-caption mt-0.5">
+          Read-only. Built from each distributor&apos;s onboarding commitments and last year&apos;s
+          actual collection — use it to judge a realistic phasing below.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <KpiCard label="Expected (committed)" value={fmtINR(totals.expected_total)} accent="indigo" sub="Σ commitment % × order value" />
+        <KpiCard label="Actually collected" value={fmtINR(totals.actual_total)} accent="emerald" sub="validated payment submissions" />
+      </div>
+
+      {/* Monthly summary */}
+      <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
+        <table className="w-full min-w-[560px] text-left text-[13px]">
+          <thead className="bg-gray-50/80 text-gray-500">
+            <tr>
+              <th className="px-3 py-2 t-overline w-[48px]">S No.</th>
+              <th className="px-3 py-2 t-overline">Month</th>
+              <th className="px-3 py-2 t-overline text-right">Expected Collection</th>
+              <th className="px-3 py-2 t-overline text-right">Cumulative</th>
+              <th className="px-3 py-2 t-overline text-right">Actual Collection</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((m, i) => (
+              <tr key={m.mkey} className="border-t border-gray-100">
+                <td className="px-3 py-2 text-gray-400 tabular-nums">{i + 1}</td>
+                <td className="px-3 py-2 font-medium text-gray-900">{m.month}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-900">{fmtINR(m.expected)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtINR(m.expected_cumulative)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-700">{m.actual == null ? <span className="text-gray-300">—</span> : fmtINR(m.actual)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Distributor breakdown (collapsible) */}
+      <div className="mt-3">
+        <Button size="sm" variant="ghost" onClick={() => setShowDistributors((v) => !v)}>
+          {showDistributors ? "− Hide" : "+ Show"} distributor-wise detail ({distributors.length})
+        </Button>
+        {showDistributors && (
+          <div className="mt-2 space-y-4">
+            {distributors.map((d) => (
+              <div key={d.customer_code} className="rounded-lg border border-gray-200">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2">
+                  <span className="text-[13px] font-semibold text-gray-900">{d.distributor}</span>
+                  <span className="text-[12px] text-gray-500">
+                    Order {fmtINR(d.order_amount)} · Committed {fmtINR(d.expected_total)} · Collected {fmtINR(d.actual_total)}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-left text-[12.5px]">
+                    <thead className="text-gray-400">
+                      <tr>
+                        <th className="px-3 py-1.5 t-overline">Month</th>
+                        <th className="px-3 py-1.5 t-overline text-right">Committed %</th>
+                        <th className="px-3 py-1.5 t-overline text-right">This month %</th>
+                        <th className="px-3 py-1.5 t-overline text-right">Expected ₹</th>
+                        <th className="px-3 py-1.5 t-overline text-right">Received till month</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.schedule.map((s) => (
+                        <tr key={s.mkey} className="border-t border-gray-100">
+                          <td className="px-3 py-1.5 text-gray-900">{s.month}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{fmtNum(s.committed_pct)}%</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{fmtNum(s.incremental_pct)}%</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-900">{fmtINR(s.expected)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-medium text-emerald-700">{s.actual_till_month == null ? <span className="text-gray-300">—</span> : fmtINR(s.actual_till_month)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function CollectionStage({ aop, patch, readOnly }: { aop: Aop; patch: Patch; readOnly: boolean }) {
   const { users } = useStore();
   const owner = users.find((u) => u.id === aop.userId);
@@ -474,6 +602,9 @@ export function CollectionStage({ aop, patch, readOnly }: { aop: Aop; patch: Pat
           </p>
         )}
       </Card>
+
+      {/* Last-year reference (read-only) — helps the ZM phase this year's plan */}
+      <LastYearCollectionRef email={aop.userId} />
 
       {/* Custom, editable milestone lines */}
       <Card>

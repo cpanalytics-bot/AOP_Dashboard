@@ -577,6 +577,38 @@ export async function liveTerritoryDefaults(email: string): Promise<{ state: str
   return { state: row?.state ?? null, district: row?.district ?? null };
 }
 
+// ---- Last-year collection reference (Collection stage) --------------------
+// One employee's distributor commitments (onboarding_form) vs actual cash.
+// Expected = incremental commitment % x total_order_amount (MV order book).
+// Actual   = payment_submissions (validated 'YES'), phased by realisation_date.
+
+export interface LycMonthRow {
+  month: string; mkey: string;
+  expected: number; expected_cumulative: number;
+  actual: number | null; // null = upcoming month (no collection yet)
+}
+export interface LycScheduleRow {
+  month: string; mkey: string;
+  committed_pct: number; incremental_pct: number;
+  expected: number;
+  actual_till_month: number | null; // null = upcoming month
+}
+export interface LycDistributor {
+  customer_code: string; distributor: string; order_amount: number;
+  expected_total: number; actual_total: number; schedule: LycScheduleRow[];
+}
+export interface LastYearCollection {
+  totals: { expected_total: number; actual_total: number; actual_phased_total: number };
+  months: LycMonthRow[];
+  distributors: LycDistributor[];
+}
+
+export async function liveLastYearCollection(email: string): Promise<LastYearCollection | null> {
+  const { data, error } = await sb().rpc("aop_last_year_collection", { p_email: email });
+  if (error || !data) return null;
+  return data as LastYearCollection;
+}
+
 // ---- Admin (Program Team) cross-zone overview -----------------------------
 
 export interface AdminOverviewRow {
