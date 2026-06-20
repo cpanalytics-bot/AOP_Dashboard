@@ -100,6 +100,60 @@ export interface HiringRequest {
   createdAt: string;
 }
 
+// A row of k8_hiring — the single hiring source of truth. Holds both the HR
+// recruitment pipeline (source='HR_SYNC', fed by the external sync) and the
+// ZM's AOP planning requests (source='AOP', raised in the platform).
+export interface K8HiringRow {
+  id: string;
+  source: "AOP" | "HR_SYNC";
+  aopRef: string | null;
+  sNo: number | null;
+  // Territory / role
+  state: string | null;
+  district: string | null; // base_location_district
+  block: string | null;
+  designation: string | null;
+  role: string | null;
+  // Status
+  status: string | null;
+  hrStatus: string | null;
+  zmStatus: string | null;
+  expectedDoj: string | null;
+  joiningDate: string | null;
+  reasonForDroppingOut: string | null;
+  reqId: string | null;
+  // People
+  reportingZm: string | null;
+  reportingManager: string | null;
+  zmEmail: string | null;
+  forEmployeeEmail: string | null;
+  // AOP planning extras
+  numberOfPositions: number | null;
+  priority: string | null;
+  hiringReason: string | null;
+  businessJustification: string | null;
+  expectedRevenueImpact: number | null;
+  hiringTimeline: string | null;
+  createdAt: string | null;
+}
+
+// What the hiring form submits. Territory is the live State → District → Block
+// cascade (district/block values are names from all_india_schools, blocks auto).
+export interface HiringFormInput {
+  forUserId: string | null;
+  baseLocation: string;
+  states: string[];
+  districts: string[];
+  blocks: string[];
+  designation: string;
+  numberOfPositions: number;
+  priority: HiringPriority;
+  reason: HiringReason;
+  businessJustification: string;
+  expectedRevenueImpact: number;
+  hiringTimeline: string;
+}
+
 export interface RevenueTargets {
   lastYearRevenue: number;
   earlyYearsRevenueLY: number;

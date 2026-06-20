@@ -9,7 +9,7 @@
 
 import { createClient } from "./client";
 import { defaultAop } from "../mock-data";
-import type { Aop, ApprovalAction, AopStatus, HiringRequest, Role, SchoolCategoryPlan, User } from "../types";
+import type { Aop, ApprovalAction, AopStatus, HiringRequest, K8HiringRow, Role, SchoolCategoryPlan, User } from "../types";
 
 const FY = "FY26-27";
 const sb = () => createClient();
@@ -621,48 +621,120 @@ export async function liveMemberSetStatus(
   });
 }
 
-// ---- Hiring ---------------------------------------------------------------
+// ---- Hiring (single source: k8_hiring) ------------------------------------
+// k8_hiring holds BOTH the HR recruitment pipeline (source='HR_SYNC', fed by the
+// external sync) and the ZM's AOP planning requests (source='AOP', written here).
 
-function rowToHiring(r: Record<string, unknown>): HiringRequest {
+function toK8(r: Record<string, unknown>): K8HiringRow {
+  const s = (v: unknown): string | null => (v == null ? null : String(v));
+  const n = (v: unknown): number | null => (v == null || v === "" ? null : Number(v));
   return {
-    id: r.unique_id as string,
-    requestedByUserId: (r.zm_email as string) ?? "",
-    forUserId: (r.for_employee_email as string) ?? null,
-    districtIds: (r.districts as string[]) ?? [],
-    baseLocation: (r.base_location as string) ?? "",
-    designation: (r.designation as string) ?? "BDA",
-    numberOfPositions: Number(r.number_of_positions) || 1,
-    priority: r.priority as HiringRequest["priority"],
-    reason: r.reason as HiringRequest["reason"],
-    businessJustification: (r.business_justification as string) ?? "",
-    expectedRevenueImpact: Number(r.expected_revenue_impact) || 0,
-    hiringTimeline: (r.hiring_timeline as string) ?? "",
-    status: r.status as HiringRequest["status"],
-    createdAt: (r.created_at as string) ?? "",
+    id: String(r.id),
+    source: (r.source as K8HiringRow["source"]) ?? "HR_SYNC",
+    aopRef: s(r.aop_ref),
+    sNo: n(r.s_no),
+    state: s(r.state),
+    district: s(r.base_location_district),
+    block: s(r.block),
+    designation: s(r.designation),
+    role: s(r.role),
+    status: s(r.status),
+    hrStatus: s(r.hr_status),
+    zmStatus: s(r.zm_status),
+    expectedDoj: s(r.expected_doj),
+    joiningDate: s(r.joining_date),
+    reasonForDroppingOut: s(r.reason_for_dropping_out),
+    reqId: s(r.req_id),
+    reportingZm: s(r.reporting_zm),
+    reportingManager: s(r.reporting_manager),
+    zmEmail: s(r.zm_email),
+    forEmployeeEmail: s(r.for_employee_email),
+    numberOfPositions: n(r.number_of_positions),
+    priority: s(r.priority),
+    hiringReason: s(r.hiring_reason),
+    businessJustification: s(r.business_justification),
+    expectedRevenueImpact: n(r.expected_revenue_impact),
+    hiringTimeline: s(r.hiring_timeline),
+    createdAt: s(r.created_at),
   };
 }
 
-export async function liveLoadHiring(aopId: string): Promise<HiringRequest[]> {
-  const { data } = await sb()
-    .from("aop_hiring").select("*").eq("aop_id", aopId).order("created_at", { ascending: false });
-  return ((data ?? []) as Record<string, unknown>[]).map(rowToHiring);
+// Map an AOP-origin k8 row onto the legacy HiringRequest shape so dashboard /
+// rollup hiring counts (forUserId, numberOfPositions) keep working unchanged.
+export function k8ToHiringRequest(r: K8HiringRow): HiringRequest {
+  return {
+    id: r.id,
+    requestedByUserId: r.zmEmail ?? "",
+    forUserId: r.forEmployeeEmail,
+    districtIds: r.district ? [r.district] : [],
+    baseLocation: r.district ?? "",
+    designation: r.designation ?? "BDA",
+    numberOfPositions: r.numberOfPositions ?? 1,
+    priority: (r.priority as HiringRequest["priority"]) ?? "High",
+    reason: (r.hiringReason as HiringRequest["reason"]) ?? "Business Growth",
+    businessJustification: r.businessJustification ?? "",
+    expectedRevenueImpact: r.expectedRevenueImpact ?? 0,
+    hiringTimeline: r.hiringTimeline ?? "",
+    status: (r.status as HiringRequest["status"]) ?? "Requested",
+    createdAt: r.createdAt ?? "",
+  };
 }
 
-export async function liveAddHiring(
-  aopId: string, zmEmail: string,
-  req: Omit<HiringRequest, "id" | "createdAt" | "requestedByUserId" | "status">,
-): Promise<HiringRequest | null> {
-  const { data, error } = await sb().from("aop_hiring").insert({
-    aop_id: aopId, zm_email: zmEmail, for_employee_email: req.forUserId,
-    base_location: req.baseLocation, districts: req.districtIds, designation: req.designation,
-    number_of_positions: req.numberOfPositions, priority: req.priority, reason: req.reason,
-    hiring_timeline: req.hiringTimeline, business_justification: req.businessJustification,
-    expected_revenue_impact: req.expectedRevenueImpact,
+// All hiring rows visible to a ZM: HR-sync rows (matched by reporting_zm name via
+// emp_record) + their own AOP requests (zm_email). Scoped server-side in the RPC.
+export async function liveK8Hiring(zmEmail: string): Promise<K8HiringRow[]> {
+  const { data, error } = await sb().rpc("aop_k8_hiring", { p_zm_email: zmEmail });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(toK8);
+}
+
+export interface K8AddInput {
+  zmEmail: string;
+  zmName: string;
+  aopId: string | null;
+  forEmployeeEmail: string | null;
+  designation: string;
+  role: string;
+  state: string;
+  district: string;
+  districts: string[];
+  block: string;
+  numberOfPositions: number;
+  priority: string;
+  hiringReason: string;
+  businessJustification: string;
+  expectedRevenueImpact: number;
+  hiringTimeline: string;
+}
+
+// Insert an AOP-origin requirement. The DB trigger stamps aop_ref automatically.
+export async function liveAddK8Hiring(input: K8AddInput): Promise<K8HiringRow | null> {
+  const { data, error } = await sb().from("k8_hiring").insert({
+    source: "AOP",
+    status: "Requested",
+    zm_status: "Pending",
+    reporting_zm: input.zmName,
+    zm_email: input.zmEmail,
+    aop_id: input.aopId,
+    for_employee_email: input.forEmployeeEmail,
+    designation: input.designation,
+    role: input.role,
+    state: input.state || null,
+    base_location_district: input.district || null,
+    districts: input.districts,
+    block: input.block || null,
+    number_of_positions: input.numberOfPositions,
+    priority: input.priority,
+    hiring_reason: input.hiringReason,
+    business_justification: input.businessJustification,
+    expected_revenue_impact: input.expectedRevenueImpact,
+    hiring_timeline: input.hiringTimeline,
   }).select("*").single();
   if (error || !data) return null;
-  return rowToHiring(data as Record<string, unknown>);
+  return toK8(data as Record<string, unknown>);
 }
 
-export async function liveUpdateHiringStatus(id: string, status: HiringRequest["status"]): Promise<void> {
-  await sb().from("aop_hiring").update({ status, updated_at: new Date().toISOString() }).eq("unique_id", id);
+// ZM status update on a k8 row (drives both the overall + zm_status columns).
+export async function liveUpdateK8Status(id: string, status: string): Promise<void> {
+  await sb().from("k8_hiring").update({ status, zm_status: status }).eq("id", id);
 }

@@ -14,7 +14,9 @@ import type {
   AopStatus,
   ApprovalAction,
   AuditLogEntry,
+  HiringFormInput,
   HiringRequest,
+  K8HiringRow,
   User,
 } from "./types";
 import {
@@ -36,6 +38,7 @@ interface PersistedState {
   currentUserId: string | null;
   aops: Record<string, Aop>;
   hiring: HiringRequest[];
+  k8Hiring: K8HiringRow[];
   users: User[];
   auditLogs: AuditLogEntry[];
 }
@@ -83,9 +86,9 @@ interface StoreContextValue {
   ) => void;
 
   hiring: HiringRequest[];
-  addHiring: (
-    req: Omit<HiringRequest, "id" | "createdAt" | "requestedByUserId" | "status">,
-  ) => void;
+  /** Single hiring source of truth (HR pipeline + AOP requests). */
+  k8Hiring: K8HiringRow[];
+  addHiring: (req: HiringFormInput) => void;
   updateHiringStatus: (id: string, status: HiringRequest["status"]) => void;
 
   auditLogs: AuditLogEntry[];
@@ -109,7 +112,7 @@ function applyTerritory(u: User, m?: live.MemberMeta): User {
 function loadState(): PersistedState {
   // Live mode starts empty; data is hydrated from Supabase on login.
   if (LIVE) {
-    return { currentUserId: null, aops: {}, hiring: [], users: [], auditLogs: [] };
+    return { currentUserId: null, aops: {}, hiring: [], k8Hiring: [], users: [], auditLogs: [] };
   }
   if (typeof window !== "undefined") {
     try {
@@ -119,6 +122,7 @@ function loadState(): PersistedState {
         return {
           ...parsed,
           users: parsed.users?.length ? parsed.users : [...seedUsers],
+          k8Hiring: parsed.k8Hiring ?? [],
           auditLogs: parsed.auditLogs ?? [],
         };
       }
@@ -130,6 +134,7 @@ function loadState(): PersistedState {
     currentUserId: null,
     aops: seededAops(),
     hiring: [...seedHiringRequests],
+    k8Hiring: [],
     users: [...seedUsers],
     auditLogs: [],
   };
@@ -140,6 +145,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     currentUserId: null,
     aops: {},
     hiring: [],
+    k8Hiring: [],
     users: [],
     auditLogs: [],
   });
@@ -149,7 +155,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // stored session is restored.
   const [hydrating, setHydrating] = useState(LIVE);
   // Live submission context (one aop_master per ZM per FY).
-  const aopMeta = useRef<{ aopId: string | null; zmEmail: string | null }>({ aopId: null, zmEmail: null });
+  const aopMeta = useRef<{ aopId: string | null; zmEmail: string | null; zmName: string | null }>(
+    { aopId: null, zmEmail: null, zmName: null },
+  );
 
   // Pull the full team + AOP bundle for a signed-in ZM (or Program Team) from Supabase.
   const hydrateLive = useCallback(async (user: User) => {
@@ -158,14 +166,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Program Team (ADMIN) has no single zone; they open individual ZM plans on demand.
       const zmEmail = user.email;
       const { aopId, status } = await live.ensureMaster(zmEmail);
-      aopMeta.current = { aopId, zmEmail };
+      aopMeta.current = { aopId, zmEmail, zmName: user.name };
       const team = user.role === "ZDM" ? await live.liveTeam(user.email) : [];
       const tbh = user.role === "ZDM" ? await live.liveListTbh(user.email) : [];
       const roster = [user, ...team.filter((m) => m.email !== user.email), ...tbh];
       const { aops, members } = await live.liveLoadBundle(aopId, status, roster, zmEmail);
       const merged = roster.map((u) => applyTerritory(u, members[u.email]));
-      const hiring = await live.liveLoadHiring(aopId);
-      setState((s) => ({ ...s, users: merged, aops, hiring, currentUserId: user.id }));
+      const k8Hiring = await live.liveK8Hiring(zmEmail);
+      const hiring = k8Hiring.filter((r) => r.source === "AOP").map(live.k8ToHiringRequest);
+      setState((s) => ({ ...s, users: merged, aops, hiring, k8Hiring, currentUserId: user.id }));
     } finally {
       setHydrating(false);
     }
@@ -265,7 +274,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     if (LIVE && typeof window !== "undefined") window.localStorage.removeItem(LIVE_EMAIL_KEY);
     if (LIVE) void live.signOutAuth();
-    aopMeta.current = { aopId: null, zmEmail: null };
+    aopMeta.current = { aopId: null, zmEmail: null, zmName: null };
     setState((s) => ({ ...s, currentUserId: null }));
   }, []);
 
@@ -583,20 +592,58 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addHiring = useCallback(
-    (req: Omit<HiringRequest, "id" | "createdAt" | "requestedByUserId" | "status">) => {
-      if (LIVE && aopMeta.current.aopId && aopMeta.current.zmEmail) {
+    (req: HiringFormInput) => {
+      // Territory comes from the live State → District → Block cascade as names.
+      const stateStr = req.states.join(", ");
+      const districtStr = req.districts.join(", ") || req.baseLocation;
+      const blockStr = req.blocks.join(", ");
+
+      if (LIVE && aopMeta.current.zmEmail) {
         void live
-          .liveAddHiring(aopMeta.current.aopId, aopMeta.current.zmEmail, req)
-          .then((row) => { if (row) setState((s) => ({ ...s, hiring: [row, ...s.hiring] })); });
+          .liveAddK8Hiring({
+            zmEmail: aopMeta.current.zmEmail,
+            zmName: aopMeta.current.zmName ?? aopMeta.current.zmEmail,
+            aopId: aopMeta.current.aopId,
+            forEmployeeEmail: req.forUserId ?? null,
+            designation: req.designation,
+            role: req.designation,
+            state: stateStr,
+            district: districtStr,
+            districts: req.districts,
+            block: blockStr,
+            numberOfPositions: req.numberOfPositions,
+            priority: req.priority,
+            hiringReason: req.reason,
+            businessJustification: req.businessJustification,
+            expectedRevenueImpact: req.expectedRevenueImpact,
+            hiringTimeline: req.hiringTimeline,
+          })
+          .then((row) => {
+            if (row) setState((s) => ({
+              ...s,
+              // New requests append at the bottom of the summary table.
+              k8Hiring: [...s.k8Hiring, row],
+              hiring: [...s.hiring, live.k8ToHiringRequest(row)],
+            }));
+          });
         return;
       }
       setState((s) => ({
         ...s,
         hiring: [
           {
-            ...req,
             id: `h-${Date.now()}`,
             requestedByUserId: s.currentUserId ?? "",
+            forUserId: req.forUserId,
+            districtIds: req.districts,
+            baseLocation: req.baseLocation,
+            designation: req.designation,
+            numberOfPositions: req.numberOfPositions,
+            priority: req.priority,
+            reason: req.reason,
+            businessJustification: req.businessJustification,
+            expectedRevenueImpact: req.expectedRevenueImpact,
+            hiringTimeline: req.hiringTimeline,
             status: "Requested",
             createdAt: new Date().toISOString(),
           },
@@ -612,8 +659,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({
         ...s,
         hiring: s.hiring.map((h) => (h.id === id ? { ...h, status } : h)),
+        k8Hiring: s.k8Hiring.map((r) => (r.id === id ? { ...r, status, zmStatus: status } : r)),
       }));
-      if (LIVE) void live.liveUpdateHiringStatus(id, status);
+      if (LIVE) void live.liveUpdateK8Status(id, status);
     },
     [],
   );
@@ -632,17 +680,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setHydrating(true);
     try {
       const { aopId, status } = await live.ensureMaster(zmEmail);
-      aopMeta.current = { aopId, zmEmail };
+      const zmUser = await live.liveLogin(zmEmail);
+      aopMeta.current = { aopId, zmEmail, zmName: zmUser?.name ?? null };
       const team = await live.liveTeam(zmEmail);
       const tbh = await live.liveListTbh(zmEmail);
       const fullTeam = [...team, ...tbh];
       const { aops, members } = await live.liveLoadBundle(aopId, status, fullTeam, zmEmail);
       const mergedTeam = fullTeam.map((u) => applyTerritory(u, members[u.email]));
-      const hiring = await live.liveLoadHiring(aopId);
+      const k8Hiring = await live.liveK8Hiring(zmEmail);
+      const hiring = k8Hiring.filter((r) => r.source === "AOP").map(live.k8ToHiringRequest);
       setState((s) => {
         const admin = s.users.find((u) => u.id === s.currentUserId);
         const roster = admin ? [admin, ...mergedTeam.filter((m) => m.id !== admin.id)] : mergedTeam;
-        return { ...s, users: roster, aops, hiring };
+        return { ...s, users: roster, aops, hiring, k8Hiring };
       });
     } finally {
       setHydrating(false);
@@ -678,6 +728,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addTbhMember,
     updateTbhMember,
     hiring: state.hiring,
+    k8Hiring: state.k8Hiring,
     addHiring,
     updateHiringStatus,
     auditLogs: state.auditLogs,

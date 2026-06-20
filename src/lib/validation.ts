@@ -9,7 +9,9 @@ const auto = z.number().or(z.nan());
 
 export const hiringSchema = z.object({
   baseLocation: z.string().min(2, "Required"),
-  districtIds: z.array(z.string()).min(1, "Select at least one district"),
+  states: z.array(z.string()).min(1, "Select at least one state"),
+  districts: z.array(z.string()).min(1, "Select at least one district"),
+  blocks: z.array(z.string()).optional().default([]),
   forUserId: z.string().nullable().optional(),
   designation: z.string().min(2, "Required"),
   numberOfPositions: z.number().int().min(1, "At least 1 position"),

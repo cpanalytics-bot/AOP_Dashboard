@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Button, Card, Field, NumberInput, Select, TextArea, TextInput } from "./ui";
+import { useEffect, useState } from "react";
+import { Button, Card, Field, NumberInput, SearchableMultiSelect, Select, TextArea, TextInput } from "./ui";
 import { useStore } from "@/lib/store";
+import { supabaseConfigured } from "@/lib/supabase/client";
 import {
-  blockNamesForDistricts,
-  blocksForDistricts,
-  districtNames,
-  districts,
-} from "@/lib/master-data";
+  liveStates,
+  liveDistrictsForStates,
+  liveBlocksForDistricts,
+  liveTerritoryDefaults,
+} from "@/lib/supabase/aop-data";
+import { districts as masterDistricts } from "@/lib/master-data";
 import { hiringSchema } from "@/lib/validation";
 import type { HiringPriority, HiringReason } from "@/lib/types";
 
@@ -27,11 +29,24 @@ const MONTHS = [
   "2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03",
 ];
 
+// ---- territory data sources (live = all_india_schools RPCs; mock = master) ----
+const fetchStates = (): Promise<string[]> =>
+  supabaseConfigured
+    ? liveStates()
+    : Promise.resolve(Array.from(new Set(masterDistricts.map((d) => d.state))).sort());
+const fetchDistricts = (states: string[]): Promise<string[]> => {
+  if (!states.length) return Promise.resolve([]);
+  return supabaseConfigured
+    ? liveDistrictsForStates(states)
+    : Promise.resolve(masterDistricts.filter((d) => states.includes(d.state)).map((d) => d.name).sort());
+};
+const fetchBlocks = (dists: string[]): Promise<string[]> =>
+  !dists.length || !supabaseConfigured ? Promise.resolve([]) : liveBlocksForDistricts(dists);
+
 export function HiringForm({
   onDone,
   embedded = false,
   forUserId = null,
-  defaultDistrictIds = [],
   defaultBaseLocation = "",
 }: {
   onDone?: () => void;
@@ -40,10 +55,9 @@ export function HiringForm({
   defaultDistrictIds?: string[];
   defaultBaseLocation?: string;
 }) {
-  const { addHiring, users } = useStore();
+  const { addHiring, users, currentUser } = useStore();
   const [form, setForm] = useState({
     baseLocation: defaultBaseLocation,
-    districtIds: defaultDistrictIds.length ? [...defaultDistrictIds] : [],
     forUserId: forUserId as string | null,
     designation: "BDA",
     numberOfPositions: 1,
@@ -53,21 +67,62 @@ export function HiringForm({
     expectedRevenueImpact: 0,
     hiringTimeline: MONTHS[3],
   });
+  const [selStates, setSelStates] = useState<string[]>([]);
+  const [selDistricts, setSelDistricts] = useState<string[]>([]);
+  const [blocks, setBlocks] = useState<string[]>([]);
+  const [stateOptions, setStateOptions] = useState<string[]>([]);
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const blocks = useMemo(() => blocksForDistricts(form.districtIds), [form.districtIds]);
+  // State options (once).
+  useEffect(() => {
+    let alive = true;
+    setLoadingStates(true);
+    fetchStates().then((s) => alive && setStateOptions(s)).finally(() => alive && setLoadingStates(false));
+    return () => { alive = false; };
+  }, []);
 
-  const toggleDistrict = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      districtIds: f.districtIds.includes(id)
-        ? f.districtIds.filter((x) => x !== id)
-        : [...f.districtIds, id],
-    }));
-  };
+  // Seed the ZM's home state/district from emp_record.
+  useEffect(() => {
+    const email = currentUser?.email;
+    if (!email || !supabaseConfigured) return;
+    let alive = true;
+    liveTerritoryDefaults(email).then((d) => {
+      if (!alive) return;
+      if (d.state) setSelStates((cur) => (cur.length ? cur : [d.state!]));
+      if (d.district) setSelDistricts((cur) => (cur.length ? cur : [d.district!]));
+    });
+    return () => { alive = false; };
+  }, [currentUser?.email]);
+
+  // District options follow the selected states.
+  useEffect(() => {
+    let alive = true;
+    setLoadingDistricts(true);
+    fetchDistricts(selStates).then((d) => alive && setDistrictOptions(d)).finally(() => alive && setLoadingDistricts(false));
+    // Drop any selected districts that no longer belong to the chosen states.
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selStates.join("|")]);
+
+  // Blocks are auto-assigned from the selected districts.
+  useEffect(() => {
+    let alive = true;
+    fetchBlocks(selDistricts).then((b) => alive && setBlocks(b));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selDistricts.join("|")]);
 
   const submit = () => {
-    const parsed = hiringSchema.safeParse(form);
+    const payload = {
+      ...form,
+      states: selStates,
+      districts: selDistricts,
+      blocks,
+    };
+    const parsed = hiringSchema.safeParse(payload);
     if (!parsed.success) {
       const e: Record<string, string> = {};
       parsed.error.issues.forEach((i) => (e[i.path.join(".")] = i.message));
@@ -103,32 +158,47 @@ export function HiringForm({
         <Field label="Base location" error={errors.baseLocation}>
           <TextInput value={form.baseLocation} onChange={(e) => setForm((f) => ({ ...f, baseLocation: e.target.value }))} />
         </Field>
+
+        {/* Territory cascade: States → Assigned districts → Assigned blocks (auto) */}
         <div className="sm:col-span-2">
-          <Field label="Districts" error={errors.districtIds} note="Select one or more districts. Blocks load automatically.">
-            <div className="flex flex-wrap gap-2">
-              {districts.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => toggleDistrict(d.id)}
-                  className={`rounded-full border px-3 py-1 text-[12px] font-medium ${
-                    form.districtIds.includes(d.id)
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                      : "border-gray-200 text-gray-600"
-                  }`}
-                >
-                  {d.name}
-                </button>
-              ))}
-            </div>
+          <Field label="States" error={errors.states}>
+            <SearchableMultiSelect
+              options={stateOptions}
+              selected={selStates}
+              onChange={setSelStates}
+              loading={loadingStates}
+              placeholder="Select states…"
+              searchPlaceholder="Search states…"
+            />
+          </Field>
+        </div>
+        <div className="sm:col-span-2">
+          <Field label="Assigned districts" error={errors.districts}>
+            <SearchableMultiSelect
+              options={districtOptions}
+              selected={selDistricts}
+              onChange={setSelDistricts}
+              loading={loadingDistricts}
+              placeholder={selStates.length ? "Select districts…" : "Pick a state first"}
+              searchPlaceholder="Search districts…"
+              emptyText={selStates.length ? "No districts for these states" : "Select a state above"}
+            />
           </Field>
         </div>
         <div className="sm:col-span-2 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-          <p className="t-overline">Block coverage (auto)</p>
+          <p className="t-overline">
+            Assigned blocks <span className="font-normal normal-case tracking-normal text-gray-400">(auto-assigned from districts)</span>
+          </p>
           <p className="mt-1 text-[13px] text-gray-700">
-            {blocks.length} blocks: {blockNamesForDistricts(form.districtIds) || "—"}
+            <span className="font-medium text-gray-900">{blocks.length} block{blocks.length === 1 ? "" : "s"}</span>
+            {blocks.length > 0 ? (
+              <span className="text-gray-500"> · {blocks.slice(0, 12).join(", ")}{blocks.length > 12 ? ` +${blocks.length - 12} more` : ""}</span>
+            ) : (
+              <span className="text-gray-400"> · {supabaseConfigured ? "Select districts to load blocks" : "Blocks load in connected mode"}</span>
+            )}
           </p>
         </div>
+
         <Field label="Designation" error={errors.designation}>
           <Select value={form.designation} onChange={(e) => setForm((f) => ({ ...f, designation: e.target.value }))}>
             <option value="BDA">BDA</option>
