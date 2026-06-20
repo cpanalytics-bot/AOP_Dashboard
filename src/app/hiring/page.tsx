@@ -38,6 +38,7 @@ function HiringContent() {
   const focusUserId = searchParams.get("user");
   const { currentUser, k8Hiring, canRaiseHiring, users } = useStore();
   const [showForm, setShowForm] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
 
   const focusUser = focusUserId ? users.find((u) => u.id === focusUserId) : null;
 
@@ -59,10 +60,22 @@ function HiringContent() {
 
       {/* ---- Summary table (single source: k8_hiring) ---- */}
       <Card className="mb-6 overflow-hidden p-0">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-start justify-between px-4 py-3">
           <h3 className="t-card-heading">Hiring summary</h3>
-          <span className="t-caption">{rows.length} record(s)</span>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={() => setSummaryOpen((v) => !v)}
+              aria-label={summaryOpen ? "Minimize hiring summary" : "Expand hiring summary"}
+              title={summaryOpen ? "Minimize" : "Expand"}
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 text-base leading-none text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            >
+              {summaryOpen ? "−" : "+"}
+            </button>
+            <span className="t-caption">{rows.length} record(s)</span>
+          </div>
         </div>
+        {summaryOpen && (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[12.5px]">
             <thead className="bg-gray-50/80 text-gray-500">
@@ -126,6 +139,7 @@ function HiringContent() {
             </tbody>
           </table>
         </div>
+        )}
       </Card>
 
       {/* ---- Hiring & manpower planning (ZM raises a new request) ---- */}
