@@ -601,9 +601,10 @@ export async function liveTerritoryDefaults(email: string): Promise<{ state: str
 }
 
 // ---- Last-year collection reference (Collection stage) --------------------
-// One employee's distributor commitments (onboarding_form) vs actual cash.
-// Expected = incremental commitment % x total_order_amount (MV order book).
-// Actual   = payment_submissions (validated 'YES'), phased by realisation_date.
+// Per-employee distributor commitments vs actual cash, from aop_last_year_collection().
+// Commitment % = cumulative-as-stored commitment % x order value, weighted over
+//   total order value. Collection % / Actual = validated payments that month.
+// donbosco's zone reads the backend tables; everyone else the original sources.
 
 export interface LycMonthRow {
   month: string; mkey: string;

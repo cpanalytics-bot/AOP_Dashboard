@@ -420,7 +420,6 @@ const MONTH_OPTIONS = [
 function LastYearCollectionRef({ email }: { email: string }) {
   const [data, setData] = useState<LastYearCollection | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showDistributors, setShowDistributors] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -449,32 +448,33 @@ function LastYearCollectionRef({ email }: { email: string }) {
     );
   }
 
-  const { totals, months, distributors } = data;
+  const { totals, months } = data;
 
   return (
     <Card>
       <div className="mb-3">
         <h3 className="t-card-heading">Last Year Collection Reference</h3>
         <p className="t-caption mt-0.5">
-          Read-only. Built from each distributor&apos;s onboarding commitments and last year&apos;s
-          actual collection — use it to judge a realistic phasing below.
+          Read-only. Commitment % is the cumulative onboarding commitment weighted over total order
+          value; Collection % is validated payments that month over the same base — use it to judge a
+          realistic phasing below.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <KpiCard label="Expected (committed)" value={fmtINR(totals.expected_total)} accent="indigo" sub="Σ commitment % × order value" />
-        <KpiCard label="Actually collected" value={fmtINR(totals.actual_total)} accent="emerald" sub="validated payment submissions" />
+        <KpiCard label="Total Order Value" value={fmtINR(totals.employee_order_value)} accent="indigo" sub="Σ order value of enabled customers" />
+        <KpiCard label="Total Actual Collection" value={fmtINR(totals.actual_total)} accent="emerald" sub={`validated payments · ${fmtNum(totals.collection_pct)}% of order value`} />
       </div>
 
-      {/* Monthly summary */}
+      {/* Monthly summary (onboarding months) */}
       <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full min-w-[560px] text-left text-[13px]">
           <thead className="bg-gray-50/80 text-gray-500">
             <tr>
               <th className="px-3 py-2 t-overline w-[48px]">S No.</th>
               <th className="px-3 py-2 t-overline">Month</th>
-              <th className="px-3 py-2 t-overline text-right">Expected Collection</th>
-              <th className="px-3 py-2 t-overline text-right">Cumulative</th>
+              <th className="px-3 py-2 t-overline text-right">Commitment %</th>
+              <th className="px-3 py-2 t-overline text-right">Collection %</th>
               <th className="px-3 py-2 t-overline text-right">Actual Collection</th>
             </tr>
           </thead>
@@ -483,58 +483,13 @@ function LastYearCollectionRef({ email }: { email: string }) {
               <tr key={m.mkey} className="border-t border-gray-100">
                 <td className="px-3 py-2 text-gray-400 tabular-nums">{i + 1}</td>
                 <td className="px-3 py-2 font-medium text-gray-900">{m.month}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-gray-900">{fmtINR(m.expected)}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtINR(m.expected_cumulative)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-900">{fmtNum(m.commitment_pct)}%</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-500">{m.collection_pct == null ? <span className="text-gray-300">—</span> : `${fmtNum(m.collection_pct)}%`}</td>
                 <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-700">{m.actual == null ? <span className="text-gray-300">—</span> : fmtINR(m.actual)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Distributor breakdown (collapsible) */}
-      <div className="mt-3">
-        <Button size="sm" variant="ghost" onClick={() => setShowDistributors((v) => !v)}>
-          {showDistributors ? "− Hide" : "+ Show"} distributor-wise detail ({distributors.length})
-        </Button>
-        {showDistributors && (
-          <div className="mt-2 space-y-4">
-            {distributors.map((d) => (
-              <div key={d.customer_code} className="rounded-lg border border-gray-200">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2">
-                  <span className="text-[13px] font-semibold text-gray-900">{d.distributor}</span>
-                  <span className="text-[12px] text-gray-500">
-                    Order {fmtINR(d.order_amount)} · Committed {fmtINR(d.expected_total)} · Collected {fmtINR(d.actual_total)}
-                  </span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-left text-[12.5px]">
-                    <thead className="text-gray-400">
-                      <tr>
-                        <th className="px-3 py-1.5 t-overline">Month</th>
-                        <th className="px-3 py-1.5 t-overline text-right">Committed %</th>
-                        <th className="px-3 py-1.5 t-overline text-right">This month %</th>
-                        <th className="px-3 py-1.5 t-overline text-right">Expected ₹</th>
-                        <th className="px-3 py-1.5 t-overline text-right">Received till month</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {d.schedule.map((s) => (
-                        <tr key={s.mkey} className="border-t border-gray-100">
-                          <td className="px-3 py-1.5 text-gray-900">{s.month}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{fmtNum(s.committed_pct)}%</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{fmtNum(s.incremental_pct)}%</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-900">{fmtINR(s.expected)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-medium text-emerald-700">{s.actual_till_month == null ? <span className="text-gray-300">—</span> : fmtINR(s.actual_till_month)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </Card>
   );
