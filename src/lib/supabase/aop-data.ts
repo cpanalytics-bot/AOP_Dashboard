@@ -101,37 +101,60 @@ export async function liveLogin(email: string): Promise<User | null> {
 
 export type OtpResult = { ok: boolean; reason?: "unauthorized" | "error"; message?: string; user?: User };
 
+// App-managed OTP (edge functions) — no Supabase Auth / Send-Email hook.
+// The functions verify_jwt=false, so we call them with the anon key directly
+// and branch on the HTTP status (403 = unauthorized, 200 = ok).
+const FN_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1`;
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+async function callFn(
+  name: string, body: Record<string, unknown>,
+): Promise<{ status: number; body: { success?: boolean; error?: string; message?: string } | null }> {
+  try {
+    const res = await fetch(`${FN_BASE}/${name}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+      body: JSON.stringify(body),
+    });
+    let json: { success?: boolean; error?: string; message?: string } | null = null;
+    try { json = await res.json(); } catch { /* empty body */ }
+    return { status: res.status, body: json };
+  } catch (err) {
+    return { status: 0, body: { error: (err as Error).message } };
+  }
+}
+
 /**
- * Step 1 of OTP sign-in. Gate on authorization FIRST (so we never email a code
- * to someone who isn't a permitted user), then send a 6-digit code via Supabase
- * Auth email OTP.
+ * Step 1 of OTP sign-in. The edge function authorizes the email server-side
+ * (via aop_login) and emails a 6-digit code from cp_analytics@pw.live; only
+ * recognised emails ever receive a code.
  */
 export async function sendLoginOtp(email: string): Promise<OtpResult> {
   const e = email.trim();
   if (!e) return { ok: false, reason: "error", message: "Enter your email." };
-  const user = await liveLogin(e);
-  if (!user) return { ok: false, reason: "unauthorized" };
-  const { error } = await sb().auth.signInWithOtp({
-    email: e,
-    options: { shouldCreateUser: true },
-  });
-  if (error) return { ok: false, reason: "error", message: error.message };
-  return { ok: true, user };
+  const { status, body } = await callFn("aop-send-otp", { email: e });
+  if (status === 403) return { ok: false, reason: "unauthorized" };
+  if (status !== 200) {
+    return { ok: false, reason: "error", message: body?.error || body?.message || "Could not send the code. Try again." };
+  }
+  return { ok: true };
 }
 
-/** Step 2 of OTP sign-in. Verify the code, then resolve the authorized user. */
+/** Step 2 of OTP sign-in. Verify the code server-side, then resolve the user. */
 export async function verifyLoginOtp(email: string, token: string): Promise<OtpResult> {
   const e = email.trim();
-  const { error } = await sb().auth.verifyOtp({ email: e, token: token.trim(), type: "email" });
-  if (error) return { ok: false, reason: "error", message: error.message };
+  const { status, body } = await callFn("aop-verify-otp", { email: e, otp: token.trim() });
+  if (status !== 200 || !body?.success) {
+    return { ok: false, reason: "error", message: body?.message || body?.error || "That code is invalid or expired." };
+  }
   const user = await liveLogin(e);
   if (!user) return { ok: false, reason: "unauthorized" };
   return { ok: true, user };
 }
 
-/** Clear the Supabase Auth session on logout. */
+/** App-managed OTP has no Supabase Auth session to clear. */
 export async function signOutAuth(): Promise<void> {
-  try { await sb().auth.signOut(); } catch { /* ignore */ }
+  /* no-op */
 }
 
 export async function liveTeam(zmEmail: string): Promise<User[]> {
@@ -584,23 +607,13 @@ export async function liveTerritoryDefaults(email: string): Promise<{ state: str
 
 export interface LycMonthRow {
   month: string; mkey: string;
-  expected: number; expected_cumulative: number;
-  actual: number | null; // null = upcoming month (no collection yet)
-}
-export interface LycScheduleRow {
-  month: string; mkey: string;
-  committed_pct: number; incremental_pct: number;
-  expected: number;
-  actual_till_month: number | null; // null = upcoming month
-}
-export interface LycDistributor {
-  customer_code: string; distributor: string; order_amount: number;
-  expected_total: number; actual_total: number; schedule: LycScheduleRow[];
+  commitment_pct: number;            // cumulative-as-stored, weighted over total order value (%)
+  collection_pct: number | null;     // null = upcoming month (no collection yet)
+  actual: number | null;             // ₹ collected that month; null = upcoming month
 }
 export interface LastYearCollection {
-  totals: { expected_total: number; actual_total: number; actual_phased_total: number };
+  totals: { employee_order_value: number; actual_total: number; collection_pct: number };
   months: LycMonthRow[];
-  distributors: LycDistributor[];
 }
 
 export async function liveLastYearCollection(email: string): Promise<LastYearCollection | null> {

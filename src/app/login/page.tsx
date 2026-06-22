@@ -6,11 +6,15 @@ import { useStore } from "@/lib/store";
 import { Badge, Button, Field, Spinner, TextInput } from "@/components/ui";
 
 export default function LoginPage() {
-  const { login, currentUser, liveMode } = useStore();
+  const { login, requestOtp, verifyOtpAndLogin, currentUser, liveMode } = useStore();
   const router = useRouter();
 
+  // "email" = collect + authorize the address; "otp" = enter the emailed code.
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -21,20 +25,73 @@ export default function LoginPage() {
   }, [currentUser, router]);
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()), [email]);
+  const codeValid = useMemo(() => /^\d{6}$/.test(code.trim()), [code]);
 
-  const handleLogin = async () => {
+  // Step 1 — authorize the email, then email a 6-digit code. In mock mode there
+  // is no Supabase Auth, so fall back to the legacy direct sign-in.
+  const handleSendCode = async () => {
     if (pending) return;
     setError("");
+    setNotice("");
     if (!emailValid) { setError("Enter a valid work email."); return; }
     setPending(true);
-    const ok = await login(email);
-    if (ok) return;
+
+    if (!liveMode) {
+      const ok = await login(email);
+      if (ok) return;
+      setPending(false);
+      setError("Email not found. Use a registered email from the list.");
+      return;
+    }
+
+    const res = await requestOtp(email);
     setPending(false);
+    if (res.ok) {
+      setStep("otp");
+      setCode("");
+      setNotice(`We sent a 6-digit code to ${email.trim()}. It expires shortly.`);
+      return;
+    }
     setError(
-      liveMode
+      res.reason === "unauthorized"
         ? "This email isn't authorized for the AOP platform. Contact the Admin Team for access."
-        : "Email not found. Use a registered email from the list.",
+        : res.message || "Could not send the code. Try again.",
     );
+  };
+
+  // Step 2 — verify the code; the store hydrates + signs in on success.
+  const handleVerify = async () => {
+    if (pending) return;
+    setError("");
+    if (!codeValid) { setError("Enter the 6-digit code from your email."); return; }
+    setPending(true);
+    const res = await verifyOtpAndLogin(email, code);
+    if (res.ok) return; // currentUser effect redirects
+    setPending(false);
+    setError(res.message || "That code is invalid or expired. Try again.");
+  };
+
+  // Resend a fresh code without leaving the OTP step.
+  const handleResend = async () => {
+    if (pending) return;
+    setError("");
+    setNotice("");
+    setPending(true);
+    const res = await requestOtp(email);
+    setPending(false);
+    if (res.ok) {
+      setCode("");
+      setNotice(`A new code was sent to ${email.trim()}.`);
+      return;
+    }
+    setError(res.message || "Could not resend the code. Try again.");
+  };
+
+  const backToEmail = () => {
+    setStep("email");
+    setCode("");
+    setError("");
+    setNotice("");
   };
 
   return (
@@ -96,28 +153,71 @@ export default function LoginPage() {
 
           {/* Heading */}
           <div className="mb-6 text-center lg:text-left">
-            <h2 className="text-[26px] font-semibold leading-tight tracking-tight text-gray-900">Welcome back</h2>
-            <p className="mt-1.5 text-[14px] text-gray-500">Sign in to your operating plan.</p>
+            <h2 className="text-[26px] font-semibold leading-tight tracking-tight text-gray-900">
+              {step === "otp" ? "Enter your code" : "Welcome back"}
+            </h2>
+            <p className="mt-1.5 text-[14px] text-gray-500">
+              {step === "otp" ? "Check your inbox for the verification code." : "Sign in to your operating plan."}
+            </p>
           </div>
 
           {/* Card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-7 shadow-[0_10px_40px_-12px_rgba(16,24,40,0.18)]">
-            <div className="space-y-4">
-              <Field label="Work email" error={error}>
-                <TextInput
-                  type="email"
-                  autoFocus
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@pw.live"
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                />
-              </Field>
-              <Button className="w-full" onClick={handleLogin} disabled={pending || !email.trim()}>
-                {pending ? (<><Spinner className="text-white" /> Signing in…</>) : "Sign in"}
-              </Button>
-            </div>
+            {step === "email" ? (
+              <div className="space-y-4">
+                <Field label="Work email" error={error}>
+                  <TextInput
+                    type="email"
+                    autoFocus
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@pw.live"
+                    onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
+                  />
+                </Field>
+                <Button className="w-full" onClick={handleSendCode} disabled={pending || !email.trim()}>
+                  {pending ? (
+                    <><Spinner className="text-white" /> {liveMode ? "Sending code…" : "Signing in…"}</>
+                  ) : liveMode ? "Send code" : "Sign in"}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {notice && (
+                  <p className="rounded-lg bg-indigo-50 px-3 py-2 text-[12.5px] leading-relaxed text-indigo-700">
+                    {notice}
+                  </p>
+                )}
+                <Field label="Verification code" error={error}>
+                  <TextInput
+                    type="text"
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    className="tracking-[0.5em] text-center text-lg font-semibold"
+                    onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+                  />
+                </Field>
+                <Button className="w-full" onClick={handleVerify} disabled={pending || !codeValid}>
+                  {pending ? (<><Spinner className="text-white" /> Verifying…</>) : "Verify & sign in"}
+                </Button>
+                <div className="flex items-center justify-between text-[12px]">
+                  <button type="button" onClick={backToEmail} disabled={pending}
+                    className="font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50">
+                    ← Change email
+                  </button>
+                  <button type="button" onClick={handleResend} disabled={pending}
+                    className="font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50">
+                    Resend code
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-5 flex items-center justify-center gap-2 border-t border-gray-100 pt-4">
               {liveMode ? <Badge tone="green" icon="●">Secure</Badge> : <Badge tone="amber">Demo</Badge>}
