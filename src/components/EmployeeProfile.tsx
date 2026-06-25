@@ -41,14 +41,9 @@ export function EmployeeProfile({ userId }: { userId: string }) {
     () => derivedBlocks.filter((b) => !removedBlocks.includes(b)),
     [derivedBlocks, removedBlocks],
   );
-  const removedVisible = useMemo(
-    () => derivedBlocks.filter((b) => removedBlocks.includes(b)),
-    [derivedBlocks, removedBlocks],
-  );
-  const removeBlock = (b: string) =>
-    setRemovedBlocks((r) => (r.includes(b) ? r : [...r, b]));
-  const restoreBlock = (b: string) =>
-    setRemovedBlocks((r) => r.filter((x) => x !== b));
+  // Dropdown selection = kept blocks; anything derived but not selected is removed.
+  const onBlocksChange = (next: string[]) =>
+    setRemovedBlocks(derivedBlocks.filter((b) => !next.includes(b)));
 
   // ---- data sources (live = all_india_schools RPCs; mock = master-data) ----
   const fetchStates = (): Promise<string[]> =>
@@ -254,31 +249,20 @@ export function EmployeeProfile({ userId }: { userId: string }) {
             </span>
           </p>
           {editing ? (
-            blocks.length === 0 && removedVisible.length === 0 ? (
-              <p className="mt-1 text-[13px] text-gray-400">
-                {supabaseConfigured ? "Select districts to load blocks" : "Blocks load in connected mode"}
+            <div className="mt-2">
+              <SearchableMultiSelect
+                options={derivedBlocks}
+                selected={blocks}
+                onChange={onBlocksChange}
+                placeholder={selDistricts.length ? "Deselect blocks…" : "Select districts first"}
+                searchPlaceholder="Search blocks…"
+                emptyText={selDistricts.length ? "No blocks for these districts" : "Select a district first"}
+              />
+              <p className="mt-1.5 t-caption">
+                {blocks.length} of {derivedBlocks.length} block{derivedBlocks.length === 1 ? "" : "s"} selected
+                {derivedBlocks.length - blocks.length > 0 ? ` · ${derivedBlocks.length - blocks.length} removed` : ""}
               </p>
-            ) : (
-              <div className="mt-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {blocks.map((b) => (
-                    <span key={b} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2 pr-1 text-[12px] text-indigo-700 ring-1 ring-inset ring-indigo-200">
-                      {b}
-                      <button type="button" onClick={() => removeBlock(b)} aria-label={`Remove ${b}`} className="grid h-4 w-4 place-items-center rounded-full text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700">×</button>
-                    </span>
-                  ))}
-                  {removedVisible.map((b) => (
-                    <button key={b} type="button" onClick={() => restoreBlock(b)} title="Click to add back"
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[12px] text-gray-400 line-through ring-1 ring-inset ring-gray-200 hover:text-gray-700">
-                      {b}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1.5 t-caption">
-                  {blocks.length} block{blocks.length === 1 ? "" : "s"} selected{removedVisible.length ? ` · ${removedVisible.length} removed` : ""}
-                </p>
-              </div>
-            )
+            </div>
           ) : (
             <p className="mt-1 text-[13px] text-gray-700">
               <span className="font-medium text-gray-900">{blocks.length} block{blocks.length === 1 ? "" : "s"}</span>

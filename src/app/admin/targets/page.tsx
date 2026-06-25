@@ -62,7 +62,7 @@ function heatStyle(v: number | null, min: number, max: number): string {
 
 export default function TargetsPage() {
   const router = useRouter();
-  const { currentUser, loadZmContext } = useStore();
+  const { currentUser, loadZmContext, hydrating } = useStore();
   const [rows, setRows] = useState<AdminTargetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>("revenue");
@@ -73,6 +73,8 @@ export default function TargetsPage() {
 
   const refresh = useCallback(async () => { setLoading(true); setRows(await liveAdminTargets()); setLoading(false); }, []);
   useEffect(() => { if (currentUser?.role === "ADMIN") void refresh(); }, [currentUser, refresh]);
+  // Redirect to login on logout (AppShell is a child here, so it can't do it).
+  useEffect(() => { if (!hydrating && !currentUser) router.replace("/login"); }, [hydrating, currentUser, router]);
 
   const zmOptions = useMemo(() => {
     const m = new Map<string, string>();

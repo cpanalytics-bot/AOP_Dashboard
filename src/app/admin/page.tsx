@@ -9,23 +9,11 @@ import { fmtINR, fmtNum, fmtPct } from "@/lib/calc";
 import {
   liveAdminOverview,
   liveAdminHiring,
-  liveAdminK8Hiring,
   liveMemberSetStatus,
   type AdminOverviewRow,
   type AdminHiringRow,
 } from "@/lib/supabase/aop-data";
-import type { AopStatus, K8HiringRow } from "@/lib/types";
-
-// Map any HR / AOP status string to a Badge tone by keyword.
-function hiringStatusTone(s: string | null): "slate" | "green" | "amber" | "red" | "blue" {
-  const v = (s ?? "").toLowerCase();
-  if (!v) return "slate";
-  if (/(close|drop|reject|left|abscond|declin|backout|back out)/.test(v)) return "red";
-  if (/(join|offer|select|approve|complete|fill|onboard)/.test(v)) return "green";
-  if (/(progress|interview|sourc|pending|process|review|screen)/.test(v)) return "amber";
-  if (/request/.test(v)) return "blue";
-  return "slate";
-}
+import type { AopStatus } from "@/lib/types";
 
 const STATUS_FILTERS: { key: AopStatus | "all" | "pending"; label: string }[] = [
   { key: "all", label: "All" },
@@ -47,11 +35,9 @@ const growthOf = (r: AdminOverviewRow): number | null => {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { currentUser, loadZmContext } = useStore();
+  const { currentUser, loadZmContext, hydrating } = useStore();
   const [rows, setRows] = useState<AdminOverviewRow[]>([]);
   const [hiring, setHiring] = useState<AdminHiringRow[]>([]);
-  const [k8Rows, setK8Rows] = useState<K8HiringRow[]>([]);
-  const [hiringTableOpen, setHiringTableOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]["key"]>("all");
@@ -61,16 +47,20 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [ov, hi, k8] = await Promise.all([liveAdminOverview(), liveAdminHiring(), liveAdminK8Hiring()]);
+    const [ov, hi] = await Promise.all([liveAdminOverview(), liveAdminHiring()]);
     setRows(ov);
     setHiring(hi);
-    setK8Rows(k8);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     if (currentUser?.role === "ADMIN") void refresh();
   }, [currentUser, refresh]);
+
+  // Redirect to login on logout (AppShell is a child here, so it can't do it).
+  useEffect(() => {
+    if (!hydrating && !currentUser) router.replace("/login");
+  }, [hydrating, currentUser, router]);
 
   const zmOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -88,14 +78,6 @@ export default function AdminPage() {
     () => (zmFilter === "all" ? hiring : hiring.filter((h) => h.zm_email === zmFilter)),
     [hiring, zmFilter],
   );
-  // Detailed k8 rows scoped to the selected zone. AOP rows match on zm_email;
-  // HR-sync rows carry only the ZM name, so match those on reporting_zm.
-  const scopedK8 = useMemo(() => {
-    if (zmFilter === "all") return k8Rows;
-    const zmName = zmOptions.find(([email]) => email === zmFilter)?.[1] ?? null;
-    return k8Rows.filter((r) => r.zmEmail === zmFilter || (zmName != null && r.reportingZm === zmName));
-  }, [k8Rows, zmFilter, zmOptions]);
-
   const summary = useMemo(() => {
     const zones = new Set(scopedRows.map((r) => r.zm_email));
     const by = (s: AopStatus) => scopedRows.filter((r) => r.member_status === s).length;
@@ -106,16 +88,6 @@ export default function AdminPage() {
     const requests = scopedHiring.reduce((s, h) => s + (h.requests || 0), 0);
     return { zones: zones.size, members: scopedRows.length, filled, approved: by("approved"), pending, revenue, positions, requests };
   }, [scopedRows, scopedHiring]);
-
-  const hiringByStatus = useMemo(() => {
-    const acc: Record<string, { requests: number; positions: number }> = {};
-    scopedHiring.forEach((h) => {
-      const k = h.status || "Requested";
-      acc[k] = acc[k] ?? { requests: 0, positions: 0 };
-      acc[k].requests += h.requests; acc[k].positions += h.positions;
-    });
-    return Object.entries(acc);
-  }, [scopedHiring]);
 
   const pendingRows = useMemo(
     () => scopedRows.filter((r) => r.member_status === "submitted" || r.member_status === "in_review"),
@@ -195,90 +167,6 @@ export default function AdminPage() {
             <KpiCard label="Revenue planned" value={fmtINR(summary.revenue)} accent="sky" sub="all zones" />
             <KpiCard label="Hiring" value={String(summary.positions)} accent="slate" sub={`${summary.requests} requests`} />
           </div>
-
-          {/* Hiring summary — on top */}
-          <Card>
-            <h3 className="t-card-heading">Hiring summary · across teams</h3>
-            <p className="t-caption mt-0.5 mb-3">Open hiring demand raised by Zonal Managers, by status.</p>
-            {hiringByStatus.length === 0 ? (
-              <p className="text-[13px] text-gray-400">No hiring requests raised yet.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {hiringByStatus.map(([status, v]) => (
-                  <KpiCard key={status} label={status} value={`${v.positions} positions`} accent="violet" sub={`${v.requests} request${v.requests === 1 ? "" : "s"}`} />
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Detailed hiring rollup — every ZM's hiring records (AOP + HR-sync) */}
-          <Card className="overflow-hidden p-0">
-            <div className="flex items-start justify-between px-4 py-3">
-              <div>
-                <h3 className="t-card-heading">ZM Hiring Summary · rollup</h3>
-                <p className="t-caption mt-0.5">Every hiring record across teams{zmFilter !== "all" ? " (filtered to selected zone)" : ""}.</p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <button
-                  type="button"
-                  onClick={() => setHiringTableOpen((v) => !v)}
-                  aria-label={hiringTableOpen ? "Minimize" : "Expand"}
-                  title={hiringTableOpen ? "Minimize" : "Expand"}
-                  className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 text-base leading-none text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                >
-                  {hiringTableOpen ? "−" : "+"}
-                </button>
-                <span className="t-caption">{scopedK8.length} record(s)</span>
-              </div>
-            </div>
-            {hiringTableOpen && (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left text-[12.5px]">
-                  <thead className="bg-gray-50/80 text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2 t-overline w-12">S No.</th>
-                      <th className="px-3 py-2 t-overline">ZM / Zone</th>
-                      <th className="px-3 py-2 t-overline">State</th>
-                      <th className="px-3 py-2 t-overline">District</th>
-                      <th className="px-3 py-2 t-overline">Block</th>
-                      <th className="px-3 py-2 t-overline">Status</th>
-                      <th className="px-3 py-2 t-overline">HR Status</th>
-                      <th className="px-3 py-2 t-overline">Expected DOJ</th>
-                      <th className="px-3 py-2 t-overline">Reason for dropping out</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {scopedK8.map((r, i) => (
-                      <tr key={r.id} className="hover:bg-gray-50/60">
-                        <td className="px-3 py-2 tabular-nums align-top text-gray-500">
-                          <div>{i + 1}</div>
-                          {r.source === "AOP" && <Badge tone="indigo">{r.aopRef ?? "AOP"}</Badge>}
-                        </td>
-                        <td className="px-3 py-2 align-top text-gray-700">{r.reportingZm ?? <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 align-top text-gray-700">{r.state ?? <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 align-top text-gray-700">
-                          <div>{r.district ?? <span className="text-gray-300">—</span>}</div>
-                          {r.designation && <div className="t-caption">{r.designation}</div>}
-                        </td>
-                        <td className="px-3 py-2 align-top text-gray-700">{r.block ?? <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 align-top">
-                          {r.status ? <Badge tone={hiringStatusTone(r.status)}>{r.status}</Badge> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          {r.hrStatus ? <Badge tone={hiringStatusTone(r.hrStatus)}>{r.hrStatus}</Badge> : <span className="text-gray-400">Not initiated</span>}
-                        </td>
-                        <td className="px-3 py-2 align-top tabular-nums text-gray-700">{r.expectedDoj ?? <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-2 align-top text-gray-600">{r.reasonForDroppingOut ?? <span className="text-gray-300">—</span>}</td>
-                      </tr>
-                    ))}
-                    {scopedK8.length === 0 && (
-                      <tr><td colSpan={9} className="px-3 py-8 text-center text-[13px] text-gray-400">No hiring records yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
 
           {/* Approval queue */}
           <Card>
