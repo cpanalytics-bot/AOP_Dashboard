@@ -35,7 +35,7 @@ const growthOf = (r: AdminOverviewRow): number | null => {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { currentUser, loadZmContext } = useStore();
+  const { currentUser, loadZmContext, hydrating } = useStore();
   const [rows, setRows] = useState<AdminOverviewRow[]>([]);
   const [hiring, setHiring] = useState<AdminHiringRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +57,11 @@ export default function AdminPage() {
     if (currentUser?.role === "ADMIN") void refresh();
   }, [currentUser, refresh]);
 
+  // Redirect to login on logout (AppShell is a child here, so it can't do it).
+  useEffect(() => {
+    if (!hydrating && !currentUser) router.replace("/login");
+  }, [hydrating, currentUser, router]);
+
   const zmOptions = useMemo(() => {
     const m = new Map<string, string>();
     rows.forEach((r) => m.set(r.zm_email, r.zm_name));
@@ -73,7 +78,6 @@ export default function AdminPage() {
     () => (zmFilter === "all" ? hiring : hiring.filter((h) => h.zm_email === zmFilter)),
     [hiring, zmFilter],
   );
-
   const summary = useMemo(() => {
     const zones = new Set(scopedRows.map((r) => r.zm_email));
     const by = (s: AopStatus) => scopedRows.filter((r) => r.member_status === s).length;
@@ -84,16 +88,6 @@ export default function AdminPage() {
     const requests = scopedHiring.reduce((s, h) => s + (h.requests || 0), 0);
     return { zones: zones.size, members: scopedRows.length, filled, approved: by("approved"), pending, revenue, positions, requests };
   }, [scopedRows, scopedHiring]);
-
-  const hiringByStatus = useMemo(() => {
-    const acc: Record<string, { requests: number; positions: number }> = {};
-    scopedHiring.forEach((h) => {
-      const k = h.status || "Requested";
-      acc[k] = acc[k] ?? { requests: 0, positions: 0 };
-      acc[k].requests += h.requests; acc[k].positions += h.positions;
-    });
-    return Object.entries(acc);
-  }, [scopedHiring]);
 
   const pendingRows = useMemo(
     () => scopedRows.filter((r) => r.member_status === "submitted" || r.member_status === "in_review"),
@@ -173,21 +167,6 @@ export default function AdminPage() {
             <KpiCard label="Revenue planned" value={fmtINR(summary.revenue)} accent="sky" sub="all zones" />
             <KpiCard label="Hiring" value={String(summary.positions)} accent="slate" sub={`${summary.requests} requests`} />
           </div>
-
-          {/* Hiring summary — on top */}
-          <Card>
-            <h3 className="t-card-heading">Hiring summary · across teams</h3>
-            <p className="t-caption mt-0.5 mb-3">Open hiring demand raised by Zonal Managers, by status.</p>
-            {hiringByStatus.length === 0 ? (
-              <p className="text-[13px] text-gray-400">No hiring requests raised yet.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {hiringByStatus.map(([status, v]) => (
-                  <KpiCard key={status} label={status} value={`${v.positions} positions`} accent="violet" sub={`${v.requests} request${v.requests === 1 ? "" : "s"}`} />
-                ))}
-              </div>
-            )}
-          </Card>
 
           {/* Approval queue */}
           <Card>

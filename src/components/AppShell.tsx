@@ -18,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return [
         { href: "/admin", label: "Health" },
         { href: "/admin/targets", label: "Targets" },
+        { href: "/admin/hiring", label: "Hiring" },
       ];
     }
     if (currentUser.role === "ZDM") {

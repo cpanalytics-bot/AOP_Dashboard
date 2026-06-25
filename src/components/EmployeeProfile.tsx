@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, SearchableMultiSelect, Select, TextInput } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { supabaseConfigured } from "@/lib/supabase/client";
 import {
   liveStates,
   liveDistrictsForStates,
+  liveDistrictsWithEnglishCount,
   liveBlocksForDistricts,
   liveTerritoryDefaults,
 } from "@/lib/supabase/aop-data";
@@ -28,9 +29,21 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   const [selDistricts, setSelDistricts] = useState<string[]>(user?.districtIds ?? []);
   const [stateOptions, setStateOptions] = useState<string[]>([]);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
-  const [blocks, setBlocks] = useState<string[]>(user?.blocks ?? []);
+  const [districtCounts, setDistrictCounts] = useState<Record<string, number>>({});
+  // Blocks: derived from districts, minus any the user has deselected.
+  const [derivedBlocks, setDerivedBlocks] = useState<string[]>(user?.blocks ?? []);
+  const [removedBlocks, setRemovedBlocks] = useState<string[]>([]);
+  const blocksSeeded = useRef(false);
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
+
+  const blocks = useMemo(
+    () => derivedBlocks.filter((b) => !removedBlocks.includes(b)),
+    [derivedBlocks, removedBlocks],
+  );
+  // Dropdown selection = kept blocks; anything derived but not selected is removed.
+  const onBlocksChange = (next: string[]) =>
+    setRemovedBlocks(derivedBlocks.filter((b) => !next.includes(b)));
 
   // ---- data sources (live = all_india_schools RPCs; mock = master-data) ----
   const fetchStates = (): Promise<string[]> =>
@@ -67,22 +80,46 @@ export function EmployeeProfile({ userId }: { userId: string }) {
     return () => { alive = false; };
   }, [user?.email]);
 
-  // District options follow the selected states.
+  // District options follow the selected states; in live mode we also pull the
+  // English-medium school count per district to label each option "Indore (1726)".
   useEffect(() => {
     let alive = true;
     setLoadingDistricts(true);
     fetchDistricts(selStates).then((d) => alive && setDistrictOptions(d)).finally(() => alive && setLoadingDistricts(false));
+    if (supabaseConfigured && selStates.length) {
+      liveDistrictsWithEnglishCount(selStates).then((rows) => {
+        if (!alive) return;
+        const m: Record<string, number> = {};
+        rows.forEach((r) => { m[r.district] = r.englishCount; });
+        setDistrictCounts(m);
+      });
+    } else {
+      setDistrictCounts({});
+    }
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selStates.join("|")]);
 
-  // Blocks are auto-assigned from the selected districts.
+  // Blocks are auto-assigned from the selected districts. The user may deselect
+  // any; those removals are preserved (we never re-add a removed block here).
   useEffect(() => {
     let alive = true;
-    fetchBlocks(selDistricts).then((b) => alive && setBlocks(b));
+    fetchBlocks(selDistricts).then((full) => {
+      if (!alive) return;
+      setDerivedBlocks(full);
+      // One-time reconstruction of removals from a previously-saved subset.
+      if (!blocksSeeded.current && (user?.blocks?.length ?? 0) > 0) {
+        const saved = user?.blocks ?? [];
+        setRemovedBlocks(full.filter((b) => !saved.includes(b)));
+        blocksSeeded.current = true;
+      }
+    });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selDistricts.join("|")]);
+
+  const districtLabel = (d: string) =>
+    districtCounts[d] != null ? `${d} (${districtCounts[d]})` : d;
 
   if (!user) return null;
 
@@ -194,6 +231,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
               selected={selDistricts}
               onChange={setSelDistricts}
               loading={loadingDistricts}
+              labelFor={districtLabel}
               placeholder={selStates.length ? "Select districts…" : "Pick a state first"}
               searchPlaceholder="Search districts…"
               emptyText={selStates.length ? "No districts for these states" : "Select a state above"}
@@ -203,19 +241,38 @@ export function EmployeeProfile({ userId }: { userId: string }) {
           )}
         </div>
 
-        {/* Blocks (auto) */}
+        {/* Blocks (auto-assigned from districts; deselectable in edit mode) */}
         <div className="sm:col-span-2">
           <p className="t-overline">
-            Assigned blocks <span className="font-normal normal-case tracking-normal text-gray-400">(auto-assigned from districts)</span>
+            Assigned blocks <span className="font-normal normal-case tracking-normal text-gray-400">
+              (auto-assigned from districts{editing ? " · remove any you don't want" : ""})
+            </span>
           </p>
-          <p className="mt-1 text-[13px] text-gray-700">
-            <span className="font-medium text-gray-900">{blocks.length} block{blocks.length === 1 ? "" : "s"}</span>
-            {blocks.length > 0 ? (
-              <span className="text-gray-500"> · {blocks.slice(0, 12).join(", ")}{blocks.length > 12 ? ` +${blocks.length - 12} more` : ""}</span>
-            ) : (
-              <span className="text-gray-400"> · {supabaseConfigured ? "Select districts to load blocks" : "Blocks load in connected mode"}</span>
-            )}
-          </p>
+          {editing ? (
+            <div className="mt-2">
+              <SearchableMultiSelect
+                options={derivedBlocks}
+                selected={blocks}
+                onChange={onBlocksChange}
+                placeholder={selDistricts.length ? "Deselect blocks…" : "Select districts first"}
+                searchPlaceholder="Search blocks…"
+                emptyText={selDistricts.length ? "No blocks for these districts" : "Select a district first"}
+              />
+              <p className="mt-1.5 t-caption">
+                {blocks.length} of {derivedBlocks.length} block{derivedBlocks.length === 1 ? "" : "s"} selected
+                {derivedBlocks.length - blocks.length > 0 ? ` · ${derivedBlocks.length - blocks.length} removed` : ""}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-[13px] text-gray-700">
+              <span className="font-medium text-gray-900">{blocks.length} block{blocks.length === 1 ? "" : "s"}</span>
+              {blocks.length > 0 ? (
+                <span className="text-gray-500"> · {blocks.slice(0, 12).join(", ")}{blocks.length > 12 ? ` +${blocks.length - 12} more` : ""}</span>
+              ) : (
+                <span className="text-gray-400"> · {supabaseConfigured ? "Select districts to load blocks" : "Blocks load in connected mode"}</span>
+              )}
+            </p>
+          )}
         </div>
       </dl>
     </Card>

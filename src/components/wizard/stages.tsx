@@ -252,12 +252,14 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
   const u = aop.universe;
   const s = aop.sampling;
   const t = aop.training;
+  const inv = aop.investment;
   const k = computeUniverseKpis(u);
 
   const setU = (field: keyof typeof u, v: number | string | boolean) =>
     patch("universe", { [field]: v } as never);
   const setS = (field: keyof typeof s, v: number) => patch("sampling", { [field]: v } as never);
   const setT = (field: keyof typeof t, v: number) => patch("training", { [field]: v } as never);
+  const setI = (field: keyof typeof inv, v: number) => patch("investment", { [field]: v } as never);
 
   const setCat = (idx: number, field: string, v: number) => {
     const categories = u.categories.map((c, i) => {
@@ -369,6 +371,9 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
           <Field label="Math & Science" required error={errors.msSampling} note="Samples for M&S products."><NumberInput value={s.msSampling} onChange={(v) => setS("msSampling", v)} disabled={readOnly} /></Field>
           <Field label="STEM" required error={errors.stemSampling} note="Samples for STEM products."><NumberInput value={s.stemSampling} onChange={(v) => setS("stemSampling", v)} disabled={readOnly} /></Field>
         </div>
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] leading-snug text-amber-700">
+          <span className="font-semibold">Disclaimer:</span> This year, Test Prep sampling will be considered only for schools where both the teacher&apos;s name and contact number have been collected.
+        </p>
       </Card>
 
       {/* 5. Bulk Deal Opportunities */}
@@ -398,6 +403,18 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
           <Field label="Principal workshops" note="Workshops for principals."><NumberInput value={t.principalWorkshops} onChange={(v) => setT("principalWorkshops", v)} disabled={readOnly} placeholder="Optional" /></Field>
           <Field label="STEM workshops" note="Workshops about STEM."><NumberInput value={t.stemWorkshops} onChange={(v) => setT("stemWorkshops", v)} disabled={readOnly} placeholder="Optional" /></Field>
           <Field label="Product demos" note="Live product demonstrations."><NumberInput value={t.productDemonstrations} onChange={(v) => setT("productDemonstrations", v)} disabled={readOnly} placeholder="Optional" /></Field>
+        </div>
+      </Card>
+
+      {/* 7. Cost */}
+      <Card>
+        <h3 className="mb-1 t-card-heading">Cost</h3>
+        <p className="t-caption mb-4">Planned spend that supports this AOP.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Reimbursement cost" hint="INR" required error={errors.reimbursementCost}
+            note="Total reimbursement spend you plan for the year (travel, expenses claimed back).">
+            <NumberInput value={inv.reimbursementCost} onChange={(v) => setI("reimbursementCost", v)} disabled={readOnly} invalid={!!errors.reimbursementCost && !Number.isFinite(inv.reimbursementCost)} />
+          </Field>
         </div>
       </Card>
     </div>
