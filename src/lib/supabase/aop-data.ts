@@ -589,6 +589,19 @@ export async function liveDistrictsForStates(states: string[]): Promise<string[]
   const { data } = await sb().rpc("aop_districts_for_states", { p_states: states });
   return ((data ?? []) as { district: string }[]).map((d) => d.district);
 }
+// Districts for the selected state(s) with the count of English-medium schools
+// (19-English in any of medium_1..4) per district. Used to label the Assigned
+// Districts picker as "Indore (1726)".
+export async function liveDistrictsWithEnglishCount(
+  states: string[],
+): Promise<{ district: string; englishCount: number }[]> {
+  if (!states.length) return [];
+  const { data } = await sb().rpc("aop_districts_with_english_count", { p_states: states });
+  return ((data ?? []) as { district: string; english_count: number }[]).map((d) => ({
+    district: d.district,
+    englishCount: Number(d.english_count) || 0,
+  }));
+}
 export async function liveBlocksForDistricts(districts: string[]): Promise<string[]> {
   if (!districts.length) return [];
   const { data } = await sb().rpc("aop_blocks_for_districts", { p_districts: districts });
@@ -730,6 +743,13 @@ export function k8ToHiringRequest(r: K8HiringRow): HiringRequest {
 // emp_record) + their own AOP requests (zm_email). Scoped server-side in the RPC.
 export async function liveK8Hiring(zmEmail: string): Promise<K8HiringRow[]> {
   const { data, error } = await sb().rpc("aop_k8_hiring", { p_zm_email: zmEmail });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(toK8);
+}
+
+// Admin (Program Team) rollup: every k8_hiring row across all ZMs.
+export async function liveAdminK8Hiring(): Promise<K8HiringRow[]> {
+  const { data, error } = await sb().rpc("aop_admin_k8_hiring");
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map(toK8);
 }

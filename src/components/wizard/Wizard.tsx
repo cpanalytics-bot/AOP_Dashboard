@@ -43,7 +43,9 @@ const STAGES = [
 
 type WizardStageKey = (typeof STAGES)[number]["key"];
 
-const LOCKED: AopStatus[] = ["submitted", "in_review", "approved"];
+// ZMs may keep editing their plan until it is approved. Submitting (or an admin
+// opening it for review) no longer locks the form — only final approval does.
+const LOCKED: AopStatus[] = ["approved"];
 
 type StageStatus = "empty" | "in_progress" | "valid" | "invalid";
 
@@ -61,7 +63,7 @@ function computeStageStatus(aop: Aop, key: WizardStageKey): StageStatus {
   // but validated separately.
   const validatableKeys: Record<string, StageKey[]> = {
     revenue: ["revenue"],
-    universe: ["universe", "sampling", "training"],
+    universe: ["universe", "sampling", "training", "investment"],
     collection: ["collection"],
   };
 
@@ -138,7 +140,7 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
     // Universe stage validates universe + sampling + training sub-schemas
     const keysToValidate: StageKey[] =
       key === "universe"
-        ? ["universe", "sampling", "training"]
+        ? ["universe", "sampling", "training", "investment"]
         : key in stageSchemas
           ? [key as StageKey]
           : [];
@@ -188,7 +190,7 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
 
   const mandatoryComplete = useMemo(
     () =>
-      (["revenue", "universe", "sampling", "training", "collection"] as const).every(
+      (["revenue", "universe", "sampling", "training", "investment", "collection"] as const).every(
         (k) => stageSchemas[k].safeParse((draft as unknown as Record<string, unknown>)[k]).success,
       ),
     [draft],
@@ -290,7 +292,7 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
       {readOnly && !rollup && (
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-800">
           {locked
-            ? "This AOP is locked because it has been submitted/approved. Use Request changes to reopen."
+            ? "This AOP is locked because it has been approved. Use Request changes to reopen."
             : "You have view-only access to this AOP."}
         </div>
       )}

@@ -392,6 +392,7 @@ export function SearchableMultiSelect({
   emptyText = "No options",
   disabled = false,
   loading = false,
+  labelFor,
 }: {
   options: string[];
   selected: string[];
@@ -401,7 +402,10 @@ export function SearchableMultiSelect({
   emptyText?: string;
   disabled?: boolean;
   loading?: boolean;
+  /** Display label for an option value (value stays clean, label can add e.g. counts). */
+  labelFor?: (value: string) => string;
 }) {
+  const label = (o: string) => (labelFor ? labelFor(o) : o);
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
   const ref = React.useRef<HTMLDivElement | null>(null);
@@ -417,8 +421,11 @@ export function SearchableMultiSelect({
 
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return needle ? options.filter((o) => o.toLowerCase().includes(needle)) : options;
-  }, [options, q]);
+    return needle
+      ? options.filter((o) => label(o).toLowerCase().includes(needle) || o.toLowerCase().includes(needle))
+      : options;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, q, labelFor]);
 
   const toggle = (o: string) =>
     onChange(selected.includes(o) ? selected.filter((x) => x !== o) : [...selected, o]);
@@ -459,7 +466,7 @@ export function SearchableMultiSelect({
                   onChange={() => toggle(o)}
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span className="text-gray-700">{o}</span>
+                <span className="text-gray-700">{label(o)}</span>
               </label>
             ))}
           </div>
@@ -477,7 +484,7 @@ export function SearchableMultiSelect({
         <div className="mt-2 flex flex-wrap gap-1.5">
           {selected.map((s) => (
             <span key={s} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pl-2 pr-1 text-[12px] text-indigo-700 ring-1 ring-inset ring-indigo-200">
-              {s}
+              {label(s)}
               {!disabled && (
                 <button type="button" onClick={() => toggle(s)} aria-label={`Remove ${s}`} className="grid h-4 w-4 place-items-center rounded-full text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700">×</button>
               )}

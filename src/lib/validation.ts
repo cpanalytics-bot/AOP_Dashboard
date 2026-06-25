@@ -84,6 +84,12 @@ export const trainingSchema = z.object({
   productDemonstrations: auto,
 });
 
+// Cost: Reimbursement cost is the only mandatory investment field (captured on
+// the Universe stage, under Trainings & Workshops). Other cost lines stay auto.
+export const investmentSchema = z.object({
+  reimbursementCost: reqNum,
+});
+
 // Collection is fully auto-derived from the revenue target + region phasing,
 // so it never blocks submission. Rows are validated leniently if present.
 export const collectionSchema = z.object({
@@ -105,6 +111,7 @@ export type StageKey =
   | "universe"
   | "sampling"
   | "training"
+  | "investment"
   | "collection";
 
 export const stageSchemas: Record<StageKey, z.ZodTypeAny> = {
@@ -112,6 +119,7 @@ export const stageSchemas: Record<StageKey, z.ZodTypeAny> = {
   universe: universeSchema,
   sampling: samplingSchema,
   training: trainingSchema,
+  investment: investmentSchema,
   collection: collectionSchema,
 };
 
