@@ -38,6 +38,11 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   const [derivedBlocks, setDerivedBlocks] = useState<string[]>(user?.blocks ?? []);
   const [removedBlocks, setRemovedBlocks] = useState<string[]>([]);
   const blocksSeeded = useRef(false);
+  // The district prune (clear-on-state-deselect) is armed only after the first
+  // settle, so the initial async seeding of selStates never wipes a member's
+  // saved districts/blocks (e.g. legacy rows whose `states` is empty but whose
+  // `districts` is not).
+  const pruneArmed = useRef(false);
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
 
@@ -100,9 +105,13 @@ export function EmployeeProfile({ userId }: { userId: string }) {
     fetchDistricts(selStates).then((d) => {
       if (!alive) return;
       setDistrictOptions(d);
-      // Bug fix: deselecting a state must drop that state's districts (and, in
-      // turn, its blocks). Keep only districts still valid for the selected states.
-      if (!selStates.length) {
+      // Deselecting a state must drop that state's districts (and, in turn, its
+      // blocks) — but ONLY on a real post-load change. On the first settle
+      // selStates may still be seeding from emp_record, so skip pruning then to
+      // avoid wiping a member's saved territory before it has loaded.
+      if (!pruneArmed.current) {
+        pruneArmed.current = true;
+      } else if (!selStates.length) {
         setSelDistricts((cur) => (cur.length ? [] : cur));
       } else if (d.length) {
         const ok = new Set(d.map((s) => s.toLowerCase()));

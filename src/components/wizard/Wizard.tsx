@@ -546,7 +546,8 @@ function ReviewStage({
         <SummaryCard title="Sampling plan" onJump={() => jumpToStage("universe")} rows={[
           ["User schools", fmtNum(aop.sampling.userSchoolsSampling)],
           ["Non-user schools", fmtNum(aop.sampling.nonUserSchoolsSampling)],
-          ["Test prep", fmtNum(aop.sampling.testPrepSampling)],
+          ["Test Prep Schools", fmtNum(aop.sampling.testPrepSampling)],
+          ["Test Prep teachers", fmtNum(aop.sampling.testPrepTeacherCount)],
           ["Early years", fmtNum(aop.sampling.earlyYearsSampling)],
           ["Math & Science", fmtNum(aop.sampling.msSampling)],
           ["STEM", fmtNum(aop.sampling.stemSampling)],
