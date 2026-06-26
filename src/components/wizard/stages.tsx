@@ -366,10 +366,23 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="User schools" required error={errors.userSchoolsSampling} note="Existing buyers you will sample again."><NumberInput value={s.userSchoolsSampling} onChange={(v) => setS("userSchoolsSampling", v)} disabled={readOnly} /></Field>
           <Field label="Non-user schools" required error={errors.nonUserSchoolsSampling} note="New schools you will sample."><NumberInput value={s.nonUserSchoolsSampling} onChange={(v) => setS("nonUserSchoolsSampling", v)} disabled={readOnly} /></Field>
-          <Field label="Test prep" required error={errors.testPrepSampling} note="Samples for test-prep products."><NumberInput value={s.testPrepSampling} onChange={(v) => setS("testPrepSampling", v)} disabled={readOnly} /></Field>
           <Field label="Early years" required error={errors.earlyYearsSampling} note="Samples for Early Years products."><NumberInput value={s.earlyYearsSampling} onChange={(v) => setS("earlyYearsSampling", v)} disabled={readOnly} /></Field>
           <Field label="Math & Science" required error={errors.msSampling} note="Samples for M&S products."><NumberInput value={s.msSampling} onChange={(v) => setS("msSampling", v)} disabled={readOnly} /></Field>
           <Field label="STEM" required error={errors.stemSampling} note="Samples for STEM products."><NumberInput value={s.stemSampling} onChange={(v) => setS("stemSampling", v)} disabled={readOnly} /></Field>
+        </div>
+      </Card>
+
+      {/* 4b. Test Prep Sampling — separate section with teacher capture + disclaimer */}
+      <Card>
+        <h3 className="mb-1 t-card-heading">Test Prep Sampling</h3>
+        <p className="t-caption mb-4">Test-prep samples are planned separately this year, alongside the teachers you will reach.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Test Prep Schools" required error={errors.testPrepSampling} note="Samples for test-prep products.">
+            <NumberInput value={s.testPrepSampling} onChange={(v) => setS("testPrepSampling", v)} disabled={readOnly} />
+          </Field>
+          <Field label="Test Prep Teacher Count" required error={errors.testPrepTeacherCount} note="No. of teachers who will be given samples — captured with name and phone number.">
+            <NumberInput value={s.testPrepTeacherCount} onChange={(v) => setS("testPrepTeacherCount", v)} disabled={readOnly} invalid={!!errors.testPrepTeacherCount && !Number.isFinite(s.testPrepTeacherCount)} />
+          </Field>
         </div>
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] leading-snug text-amber-700">
           <span className="font-semibold">Disclaimer:</span> This year, Test Prep sampling will be considered only for schools where both the teacher&apos;s name and contact number have been collected.
@@ -409,13 +422,16 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
       {/* 7. Cost */}
       <Card>
         <h3 className="mb-1 t-card-heading">Cost</h3>
-        <p className="t-caption mb-4">Planned spend that supports this AOP.</p>
+        <p className="t-caption mb-4">Planned spend for the Annual Reimbursement Budget.</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Reimbursement cost" hint="INR" required error={errors.reimbursementCost}
+          <Field label="Reimbursement Budget" hint="INR" required error={errors.reimbursementCost}
             note="Total reimbursement spend you plan for the year (travel, expenses claimed back).">
             <NumberInput value={inv.reimbursementCost} onChange={(v) => setI("reimbursementCost", v)} disabled={readOnly} invalid={!!errors.reimbursementCost && !Number.isFinite(inv.reimbursementCost)} />
           </Field>
         </div>
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] leading-snug text-amber-700">
+          <span className="font-semibold">Disclaimer:</span> Different zones and states may have different travel requirements — plan the budget accordingly.
+        </p>
       </Card>
     </div>
   );

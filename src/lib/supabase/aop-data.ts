@@ -303,6 +303,7 @@ function applySampling(aop: Aop, s: Record<string, number>) {
   aop.sampling.userSchoolsSampling = nz(s.user_schools_sampling);
   aop.sampling.nonUserSchoolsSampling = nz(s.non_user_schools_sampling);
   aop.sampling.testPrepSampling = nz(s.test_prep_sampling);
+  aop.sampling.testPrepTeacherCount = nz(s.test_prep_teacher_count);
   aop.sampling.earlyYearsSampling = nz(s.early_years_sampling);
   aop.sampling.msSampling = nz(s.ms_sampling);
   aop.sampling.stemSampling = nz(s.stem_sampling);
@@ -355,7 +356,8 @@ const universeRow = (a: Aop) => ({
 });
 const samplingRow = (a: Aop) => ({
   user_schools_sampling: a.sampling.userSchoolsSampling, non_user_schools_sampling: a.sampling.nonUserSchoolsSampling,
-  test_prep_sampling: a.sampling.testPrepSampling, early_years_sampling: a.sampling.earlyYearsSampling,
+  test_prep_sampling: a.sampling.testPrepSampling, test_prep_teacher_count: a.sampling.testPrepTeacherCount,
+  early_years_sampling: a.sampling.earlyYearsSampling,
   ms_sampling: a.sampling.msSampling, stem_sampling: a.sampling.stemSampling, panel_sampling: a.sampling.panelSampling,
   non_user_school_conversion_pct: a.sampling.nonUserSchoolConversion,
   non_user_conversion_value: a.sampling.nonUserConversionValue,
@@ -584,6 +586,16 @@ export async function liveStates(): Promise<string[]> {
   const { data } = await sb().rpc("aop_states");
   return ((data ?? []) as { state: string }[]).map((d) => d.state);
 }
+// States with the count of English-medium schools per state, to label the
+// Assigned States picker as "Rajasthan (12345 schools)". Backed by a precomputed
+// lookup table so it stays fast under the anon statement timeout.
+export async function liveStatesWithEnglishCount(): Promise<{ state: string; englishCount: number }[]> {
+  const { data } = await sb().rpc("aop_states_with_english_count");
+  return ((data ?? []) as { state: string; english_count: number }[]).map((d) => ({
+    state: d.state,
+    englishCount: Number(d.english_count) || 0,
+  }));
+}
 export async function liveDistrictsForStates(states: string[]): Promise<string[]> {
   if (!states.length) return [];
   const { data } = await sb().rpc("aop_districts_for_states", { p_states: states });
@@ -606,6 +618,18 @@ export async function liveBlocksForDistricts(districts: string[]): Promise<strin
   if (!districts.length) return [];
   const { data } = await sb().rpc("aop_blocks_for_districts", { p_districts: districts });
   return ((data ?? []) as { block: string }[]).map((d) => d.block);
+}
+// Blocks for the selected district(s) with the count of English-medium schools
+// per block. Used to label the Assigned Blocks picker as "Bareilly Town (538 schools)".
+export async function liveBlocksWithEnglishCount(
+  districts: string[],
+): Promise<{ block: string; englishCount: number }[]> {
+  if (!districts.length) return [];
+  const { data } = await sb().rpc("aop_blocks_with_english_count", { p_districts: districts });
+  return ((data ?? []) as { block: string; english_count: number }[]).map((d) => ({
+    block: d.block,
+    englishCount: Number(d.english_count) || 0,
+  }));
 }
 export async function liveTerritoryDefaults(email: string): Promise<{ state: string | null; district: string | null }> {
   const { data } = await sb().rpc("aop_territory_defaults", { p_email: email });

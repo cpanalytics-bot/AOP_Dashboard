@@ -215,6 +215,7 @@ export interface SamplingPlanning {
   userSchoolsSampling: number;
   nonUserSchoolsSampling: number;
   testPrepSampling: number;
+  testPrepTeacherCount: number;
   earlyYearsSampling: number;
   msSampling: number;
   stemSampling: number;

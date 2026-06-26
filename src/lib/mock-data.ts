@@ -204,6 +204,7 @@ export function defaultAop(userId: string): Aop {
       userSchoolsSampling: NaN,
       nonUserSchoolsSampling: NaN,
       testPrepSampling: NaN,
+      testPrepTeacherCount: NaN,
       earlyYearsSampling: NaN,
       msSampling: NaN,
       stemSampling: NaN,

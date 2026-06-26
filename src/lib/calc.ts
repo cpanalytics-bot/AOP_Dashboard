@@ -508,6 +508,7 @@ function sumSampling(aops: Aop[]) {
       acc.userSchoolsSampling += x.userSchoolsSampling;
       acc.nonUserSchoolsSampling += x.nonUserSchoolsSampling;
       acc.testPrepSampling += x.testPrepSampling;
+      acc.testPrepTeacherCount += x.testPrepTeacherCount;
       acc.earlyYearsSampling += x.earlyYearsSampling;
       acc.msSampling += x.msSampling;
       acc.stemSampling += x.stemSampling;
@@ -524,6 +525,7 @@ function sumSampling(aops: Aop[]) {
       userSchoolsSampling: 0,
       nonUserSchoolsSampling: 0,
       testPrepSampling: 0,
+      testPrepTeacherCount: 0,
       earlyYearsSampling: 0,
       msSampling: 0,
       stemSampling: 0,

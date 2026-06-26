@@ -66,6 +66,7 @@ export const samplingSchema = z.object({
   userSchoolsSampling: reqNum,
   nonUserSchoolsSampling: reqNum,
   testPrepSampling: reqNum,
+  testPrepTeacherCount: reqNum, // mandatory — teachers given test-prep samples (name + phone)
   earlyYearsSampling: reqNum,
   msSampling: reqNum,
   stemSampling: reqNum,

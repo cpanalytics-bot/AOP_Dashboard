@@ -9,6 +9,8 @@ import {
   liveDistrictsForStates,
   liveDistrictsWithEnglishCount,
   liveBlocksForDistricts,
+  liveBlocksWithEnglishCount,
+  liveStatesWithEnglishCount,
   liveTerritoryDefaults,
 } from "@/lib/supabase/aop-data";
 import { districts as masterDistricts } from "@/lib/master-data";
@@ -29,7 +31,9 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   const [selDistricts, setSelDistricts] = useState<string[]>(user?.districtIds ?? []);
   const [stateOptions, setStateOptions] = useState<string[]>([]);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [stateCounts, setStateCounts] = useState<Record<string, number>>({});
   const [districtCounts, setDistrictCounts] = useState<Record<string, number>>({});
+  const [blockCounts, setBlockCounts] = useState<Record<string, number>>({});
   // Blocks: derived from districts, minus any the user has deselected.
   const [derivedBlocks, setDerivedBlocks] = useState<string[]>(user?.blocks ?? []);
   const [removedBlocks, setRemovedBlocks] = useState<string[]>([]);
@@ -59,11 +63,19 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   const fetchBlocks = (dists: string[]): Promise<string[]> =>
     !dists.length || !supabaseConfigured ? Promise.resolve([]) : liveBlocksForDistricts(dists);
 
-  // State options (once).
+  // State options (once) + English-medium school count per state for the label.
   useEffect(() => {
     let alive = true;
     setLoadingStates(true);
     fetchStates().then((s) => alive && setStateOptions(s)).finally(() => alive && setLoadingStates(false));
+    if (supabaseConfigured) {
+      liveStatesWithEnglishCount().then((rows) => {
+        if (!alive) return;
+        const m: Record<string, number> = {};
+        rows.forEach((r) => { m[r.state] = r.englishCount; });
+        setStateCounts(m);
+      });
+    }
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -85,7 +97,21 @@ export function EmployeeProfile({ userId }: { userId: string }) {
   useEffect(() => {
     let alive = true;
     setLoadingDistricts(true);
-    fetchDistricts(selStates).then((d) => alive && setDistrictOptions(d)).finally(() => alive && setLoadingDistricts(false));
+    fetchDistricts(selStates).then((d) => {
+      if (!alive) return;
+      setDistrictOptions(d);
+      // Bug fix: deselecting a state must drop that state's districts (and, in
+      // turn, its blocks). Keep only districts still valid for the selected states.
+      if (!selStates.length) {
+        setSelDistricts((cur) => (cur.length ? [] : cur));
+      } else if (d.length) {
+        const ok = new Set(d.map((s) => s.toLowerCase()));
+        setSelDistricts((cur) => {
+          const kept = cur.filter((x) => ok.has(x.toLowerCase()));
+          return kept.length === cur.length ? cur : kept;
+        });
+      }
+    }).finally(() => alive && setLoadingDistricts(false));
     if (supabaseConfigured && selStates.length) {
       liveDistrictsWithEnglishCount(selStates).then((rows) => {
         if (!alive) return;
@@ -114,12 +140,28 @@ export function EmployeeProfile({ userId }: { userId: string }) {
         blocksSeeded.current = true;
       }
     });
+    // English-medium school count per block, to label the Assigned Blocks picker.
+    if (supabaseConfigured && selDistricts.length) {
+      liveBlocksWithEnglishCount(selDistricts).then((rows) => {
+        if (!alive) return;
+        const m: Record<string, number> = {};
+        rows.forEach((r) => { m[r.block] = r.englishCount; });
+        setBlockCounts(m);
+      });
+    } else {
+      setBlockCounts({});
+    }
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selDistricts.join("|")]);
 
+  const schoolsSuffix = (n: number) => `${n} school${n === 1 ? "" : "s"}`;
+  const stateLabel = (st: string) =>
+    stateCounts[st] != null ? `${st} (${schoolsSuffix(stateCounts[st])})` : st;
   const districtLabel = (d: string) =>
-    districtCounts[d] != null ? `${d} (${districtCounts[d]})` : d;
+    districtCounts[d] != null ? `${d} (${schoolsSuffix(districtCounts[d])})` : d;
+  const blockLabel = (b: string) =>
+    blockCounts[b] != null ? `${b} (${schoolsSuffix(blockCounts[b])})` : b;
 
   if (!user) return null;
 
@@ -214,6 +256,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
               selected={selStates}
               onChange={setSelStates}
               loading={loadingStates}
+              labelFor={stateLabel}
               placeholder="Select states…"
               searchPlaceholder="Search states…"
             />
@@ -254,6 +297,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
                 options={derivedBlocks}
                 selected={blocks}
                 onChange={onBlocksChange}
+                labelFor={blockLabel}
                 placeholder={selDistricts.length ? "Deselect blocks…" : "Select districts first"}
                 searchPlaceholder="Search blocks…"
                 emptyText={selDistricts.length ? "No blocks for these districts" : "Select a district first"}
