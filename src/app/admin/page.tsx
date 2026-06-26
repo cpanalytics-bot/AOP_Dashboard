@@ -184,7 +184,7 @@ export default function AdminPage() {
                       <span className="t-caption">· {r.zm_name} · {fmtINR(Number(r.revenue_target) || 0)}</span>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <Button size="sm" variant="ghost" onClick={() => openMember(r)}>Open</Button>
+                      <Button size="sm" variant="primary" onClick={() => openMember(r)}>Open</Button>
                       <Button size="sm" variant="success" disabled={acting === r.member_email} onClick={() => act(r, "approve")}>Approve</Button>
                       <Button size="sm" variant="outline" disabled={acting === r.member_email} onClick={() => act(r, "request_changes")}>Changes</Button>
                       <Button size="sm" variant="danger" disabled={acting === r.member_email} onClick={() => act(r, "reject")}>Reject</Button>
@@ -252,7 +252,7 @@ export default function AdminPage() {
                       <td className="py-2 px-3"><StatusPill status={r.member_status} /></td>
                       <td className="py-2 px-3">
                         <div className="flex justify-end gap-1.5">
-                          <Button size="sm" variant="ghost" onClick={() => openMember(r)}>Open</Button>
+                          <Button size="sm" variant="primary" onClick={() => openMember(r)}>Open</Button>
                           {(r.member_status === "submitted" || r.member_status === "in_review") && (
                             <Button size="sm" variant="success" disabled={acting === r.member_email} onClick={() => act(r, "approve")}>Approve</Button>
                           )}
