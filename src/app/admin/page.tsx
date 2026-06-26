@@ -86,7 +86,12 @@ export default function AdminPage() {
     const filled = scopedRows.filter((r) => r.is_filled).length;
     const positions = scopedHiring.reduce((s, h) => s + (h.positions || 0), 0);
     const requests = scopedHiring.reduce((s, h) => s + (h.requests || 0), 0);
-    return { zones: zones.size, members: scopedRows.length, filled, approved: by("approved"), pending, revenue, positions, requests };
+    return {
+      zones: zones.size, members: scopedRows.length, filled, revenue, positions, requests, pending,
+      // Plan-status funnel — exhaustive, so these add up to `members`.
+      notStarted: by("not_started"), draft: by("draft"), submitted: pending,
+      changes: by("changes_requested"), approved: by("approved"), rejected: by("rejected"),
+    };
   }, [scopedRows, scopedHiring]);
 
   const pendingRows = useMemo(
@@ -159,13 +164,35 @@ export default function AdminPage() {
       ) : (
         <div className="space-y-5">
           {/* Headline KPIs */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <KpiCard label="Zones" value={String(summary.zones)} accent="indigo" sub="active ZMs" />
-            <KpiCard label="Members" value={String(summary.members)} accent="violet" sub={`${summary.filled} filled`} />
-            <KpiCard label="Needs review" value={String(summary.pending)} accent="amber" sub="submitted plans" />
-            <KpiCard label="Approved" value={String(summary.approved)} accent="emerald" sub="member plans" />
-            <KpiCard label="Revenue planned" value={fmtINR(summary.revenue)} accent="sky" sub="all zones" />
-            <KpiCard label="Hiring" value={String(summary.positions)} accent="slate" sub={`${summary.positions} position${summary.positions === 1 ? "" : "s"} · ${summary.requests} AOP request${summary.requests === 1 ? "" : "s"}`} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <KpiCard label="Zones" value={String(summary.zones)} accent="indigo" sub="active ZMs"
+              tip="Number of Zonal Managers (zones) currently in view. Each ZM owns the AOP plans for their team. Use the zone filter below to scope everything to one ZM." />
+            <KpiCard label="Members" value={String(summary.members)} accent="violet" sub="BDM + BDA total"
+              tip="Total team members (BDMs + BDAs) across all zones expected to file an AOP. The Plan-status cards below break this down — Not started + Draft + Submitted + Changes requested + Approved + Rejected add up to this number." />
+            <KpiCard label="Revenue planned" value={fmtINR(summary.revenue)} accent="sky" sub="all zones"
+              tip="Sum of every member's Total Revenue Target for FY26-27, across all plans that have a target entered (draft or submitted)." />
+            <KpiCard label="Hiring" value={String(summary.positions)} accent="slate"
+              sub={`${summary.positions} position${summary.positions === 1 ? "" : "s"} · ${summary.requests} AOP request${summary.requests === 1 ? "" : "s"}`}
+              tip="Hiring positions requested through AOP plans only (raised by ZMs inside the platform). This is NOT the full recruitment pipeline — the Hiring tab also shows HR-synced requisitions." />
+          </div>
+
+          {/* Plan-status funnel — every member sits in exactly one of these */}
+          <div>
+            <p className="mb-2 t-overline text-gray-400">Plan status · adds up to {summary.members} members</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <KpiCard label="Not started" value={String(summary.notStarted)} accent="slate" sub="no plan yet"
+                tip="Members who haven't opened or started their AOP at all (status: Not started)." />
+              <KpiCard label="Draft" value={String(summary.draft)} accent="amber" sub="in progress"
+                tip="Plans the member is still filling in — not yet submitted for review (status: Draft)." />
+              <KpiCard label="Submitted" value={String(summary.submitted)} accent="indigo" sub="awaiting review"
+                tip="Plans submitted by the member and waiting for you to review — this is exactly the Approval queue below (status: Submitted / In review)." />
+              <KpiCard label="Changes requested" value={String(summary.changes)} accent="violet" sub="sent back"
+                tip="Plans you sent back to the member to revise. They edit and re-submit (status: Changes requested)." />
+              <KpiCard label="Approved" value={String(summary.approved)} accent="emerald" sub="signed off"
+                tip="Plans you reviewed and approved — locked in for FY26-27 (status: Approved)." />
+              <KpiCard label="Rejected" value={String(summary.rejected)} accent="rose" sub="declined"
+                tip="Plans you rejected/declined (status: Rejected)." />
+            </div>
           </div>
 
           {/* Approval queue */}

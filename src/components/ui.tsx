@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import type { AopStatus } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -286,18 +287,63 @@ export function Stat({
  * Bigger than `Stat`, with an optional accent tint and a "frozen" lock chip for
  * read-only snapshot values.
  */
+/** Small "i" info icon with a hover/tap tooltip, portal-rendered so it escapes
+ *  overflow-hidden cards and is never clipped. */
+export function InfoTip({ text }: { text: string }) {
+  const [show, setShow] = React.useState(false);
+  const [pos, setPos] = React.useState<{ top: number; left: number; placement: "top" | "bottom" }>({ top: 0, left: 0, placement: "top" });
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const W = 240, M = 8;
+  const open = () => {
+    const el = btnRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const placement = r.top < 150 ? "bottom" : "top";
+      const left = Math.min(Math.max(r.left + r.width / 2, W / 2 + M), window.innerWidth - W / 2 - M);
+      setPos({ top: placement === "top" ? r.top - M : r.bottom + M, left, placement });
+    }
+    setShow(true);
+  };
+  return (
+    <span className="inline-block align-middle">
+      <button
+        ref={btnRef}
+        type="button"
+        className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-gray-200 text-[9px] font-bold leading-none text-gray-500 transition-colors hover:bg-indigo-100 hover:text-indigo-600"
+        onMouseEnter={open}
+        onMouseLeave={() => setShow(false)}
+        onClick={(e) => { e.preventDefault(); show ? setShow(false) : open(); }}
+        aria-label={text}
+      >
+        i
+      </button>
+      {show && typeof document !== "undefined" && createPortal(
+        <span
+          style={{ position: "fixed", top: pos.top, left: pos.left, transform: `translate(-50%, ${pos.placement === "top" ? "-100%" : "0"})` }}
+          className="pointer-events-none z-[1000] block w-60 rounded-lg border border-gray-200 bg-white p-2.5 text-left text-[12px] font-normal normal-case leading-snug tracking-normal text-gray-700 shadow-xl"
+        >
+          {text}
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 export function KpiCard({
   label,
   value,
   sub,
   accent = "indigo",
   frozen = false,
+  tip,
 }: {
   label: string;
   value: string;
   sub?: string;
-  accent?: "indigo" | "emerald" | "sky" | "amber" | "violet" | "slate";
+  accent?: "indigo" | "emerald" | "sky" | "amber" | "violet" | "slate" | "rose";
   frozen?: boolean;
+  tip?: string;
 }) {
   const accents: Record<string, string> = {
     indigo: "from-indigo-50",
@@ -306,6 +352,7 @@ export function KpiCard({
     amber: "from-amber-50",
     violet: "from-violet-50",
     slate: "from-gray-50",
+    rose: "from-rose-50",
   };
   const dots: Record<string, string> = {
     indigo: "bg-indigo-500",
@@ -314,12 +361,14 @@ export function KpiCard({
     amber: "bg-amber-500",
     violet: "bg-violet-500",
     slate: "bg-gray-400",
+    rose: "bg-rose-500",
   };
   return (
     <div className={`relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-b ${accents[accent]} to-white p-3.5`}>
       <div className="flex items-center gap-1.5">
         <span className={`h-1.5 w-1.5 rounded-full ${dots[accent]}`} aria-hidden />
         <span className="t-overline">{label}</span>
+        {tip && <InfoTip text={tip} />}
         {frozen && (
           <span className="ml-auto rounded bg-white/70 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 ring-1 ring-inset ring-gray-200">
             🔒 Live
