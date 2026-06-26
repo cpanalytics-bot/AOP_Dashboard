@@ -165,7 +165,7 @@ export default function AdminPage() {
             <KpiCard label="Needs review" value={String(summary.pending)} accent="amber" sub="submitted plans" />
             <KpiCard label="Approved" value={String(summary.approved)} accent="emerald" sub="member plans" />
             <KpiCard label="Revenue planned" value={fmtINR(summary.revenue)} accent="sky" sub="all zones" />
-            <KpiCard label="Hiring" value={String(summary.positions)} accent="slate" sub={`${summary.requests} requests`} />
+            <KpiCard label="Hiring" value={String(summary.positions)} accent="slate" sub={`${summary.positions} position${summary.positions === 1 ? "" : "s"} · ${summary.requests} AOP request${summary.requests === 1 ? "" : "s"}`} />
           </div>
 
           {/* Approval queue */}
