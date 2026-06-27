@@ -117,8 +117,9 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-// Category = UDISE total-student-enrolment bucket, computed in the backend view
-// aop_src_universe_category_breakdown from en_total_students.
+// A/B/C/D/Unknown come from the stored school_category label (the K8 dashboard's
+// classification, via aop_src_universe_category_breakdown). The size thresholds
+// below describe what each band represents.
 const CATEGORY_DEFINITIONS: Record<string, string> = {
   A: "Category A — schools with more than 1,500 students (UDISE total enrolment). The largest schools.",
   B: "Category B — schools with 1,001–1,500 students (UDISE total enrolment).",
