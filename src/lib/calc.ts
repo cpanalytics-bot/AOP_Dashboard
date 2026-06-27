@@ -229,8 +229,11 @@ export function computeAopKpis(aop: Aop): AopKpis {
     schoolGrowthPct: uni.schoolGrowthPct,
     retentionPct,
     conversionPct,
+    // Revenue / school = revenue target spread over the schools you expect to
+    // CONVERT (place orders), not all target schools. Falls back to active
+    // schools only if no conversions are planned (avoids divide-by-zero).
     revenuePerSchool: round(
-      safeDiv(aop.revenue.totalRevenueTarget, uni.targetTotalFromCategories || activeSchools),
+      safeDiv(aop.revenue.totalRevenueTarget, conversionSchools || activeSchools),
     ),
     totalRevenueTarget: aop.revenue.totalRevenueTarget,
   };

@@ -450,7 +450,7 @@ function ReviewStage({
           <Stat label="School growth" value={fmtPct(kpis.schoolGrowthPct)} tip="Schools you plan to target vs schools active today. (Target schools − Current active) ÷ Current active. Negative means you're planning fewer schools than are active now." />
           <Stat label="Retention" value={fmtPct(kpis.retentionPct)} tip="Share of your existing customers (user schools — those that have already transacted) you plan to retain. Retention schools ÷ User schools." />
           <Stat label="Conversion" value={fmtPct(kpis.conversionPct)} tip="Share of your target schools you expect to convert into orders. Planned conversions ÷ Target schools." />
-          <Stat label="Revenue / school" value={fmtINR(kpis.revenuePerSchool)} tip="Average revenue you're planning per target school. Total revenue target ÷ Target schools." />
+          <Stat label="Revenue / school" value={fmtINR(kpis.revenuePerSchool)} tip="Average revenue per school you expect to convert (place an order). Total revenue target ÷ Conversion schools." />
         </div>
       </Card>
 
