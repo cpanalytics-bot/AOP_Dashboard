@@ -383,15 +383,20 @@ const costRow = (a: Aop) => ({
 function applySnapshot(aop: Aop, snap?: MemberSnapshot) {
   if (!snap) return;
   const set = (cur: number, next?: number) => (cur ? cur : next || 0);
+  // LY actuals + AOV are a LIVE reference (the card is labelled "Live"), so they
+  // must always reflect the current snapshot — not a value frozen into a saved /
+  // submitted aop_revenue row. Prefer the snapshot; fall back to the saved figure
+  // only when the snapshot is empty, so we never blank an existing number.
+  const live = (cur: number, next?: number) => (next ? next : cur || 0);
   if (snap.revenue) {
-    aop.revenue.lastYearRevenue = set(aop.revenue.lastYearRevenue, snap.revenue.last_year_revenue);
-    aop.revenue.earlyYearsRevenueLY = set(aop.revenue.earlyYearsRevenueLY, snap.revenue.early_years_ly);
-    aop.revenue.mathScienceRevenueLY = set(aop.revenue.mathScienceRevenueLY, snap.revenue.math_science_ly);
-    aop.revenue.otherCategoriesRevenueLY = set(aop.revenue.otherCategoriesRevenueLY, snap.revenue.other_categories_ly);
+    aop.revenue.lastYearRevenue = live(aop.revenue.lastYearRevenue, snap.revenue.last_year_revenue);
+    aop.revenue.earlyYearsRevenueLY = live(aop.revenue.earlyYearsRevenueLY, snap.revenue.early_years_ly);
+    aop.revenue.mathScienceRevenueLY = live(aop.revenue.mathScienceRevenueLY, snap.revenue.math_science_ly);
+    aop.revenue.otherCategoriesRevenueLY = live(aop.revenue.otherCategoriesRevenueLY, snap.revenue.other_categories_ly);
   }
   // Current AOV = spec-correct per-school AOV (top-level), falling back to the
   // revenue block. Lives outside the revenue guard so it fills even with no LY row.
-  aop.revenue.currentAov = set(aop.revenue.currentAov, snap.aov ?? snap.revenue?.current_aov);
+  aop.revenue.currentAov = live(aop.revenue.currentAov, snap.aov ?? snap.revenue?.current_aov);
   if (snap.universe) {
     aop.universe.totalSchools = set(aop.universe.totalSchools, snap.universe.total_schools);
     aop.universe.activeSchools = set(aop.universe.activeSchools, snap.universe.active_schools);
