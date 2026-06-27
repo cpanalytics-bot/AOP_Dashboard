@@ -117,14 +117,15 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-// Category definitions with actual classification logic
+// Category = UDISE total-student-enrolment bucket, computed in the backend view
+// aop_src_universe_category_breakdown from en_total_students.
 const CATEGORY_DEFINITIONS: Record<string, string> = {
-  A: "Category A: Schools with 500+ students AND ₹1L+ annual revenue. Top-tier buyers with proven purchasing history.",
-  B: "Category B: Schools with 200–500 students AND ₹30K–₹1L annual revenue. Mid-tier with growth potential.",
-  C: "Category C: Schools with 100–200 students AND ₹10K–₹30K annual revenue. Smaller institutions, newer relationships.",
-  D: "Category D: Schools with <100 students OR <₹10K annual revenue. Low-activity or nascent territory schools.",
-  Uncategorized: "Schools not yet classified — pending data collection, territory mapping, or first interaction.",
-  Chain: "Schools belonging to a group or franchise network. Shared procurement decisions, centralized billing.",
+  A: "Category A — schools with more than 1,500 students (UDISE total enrolment). The largest schools.",
+  B: "Category B — schools with 1,001–1,500 students (UDISE total enrolment).",
+  C: "Category C — schools with 500–1,000 students (UDISE total enrolment).",
+  D: "Category D — schools with 1–499 students (UDISE total enrolment). The smallest schools.",
+  Unknown: "Unknown — no UDISE student-count is available for the school.",
+  Chain: "Chain — the same school name appears across more than one district (a group / franchise).",
 };
 
 // ---------------------------------------------------------------------------

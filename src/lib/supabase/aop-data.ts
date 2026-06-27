@@ -13,7 +13,7 @@ import type { Aop, ApprovalAction, AopStatus, HiringRequest, K8HiringRow, Role, 
 
 const FY = "FY26-27";
 const sb = () => createClient();
-export const UNIVERSE_CATEGORIES = ["A", "B", "C", "D", "Uncategorized", "Chain"] as const;
+export const UNIVERSE_CATEGORIES = ["A", "B", "C", "D", "Unknown", "Chain"] as const;
 
 // DB null <-> blank (NaN) so a never-filled mandatory field stays blank on reload.
 const nz = (v: unknown): number => (v === null || v === undefined ? NaN : Number(v));

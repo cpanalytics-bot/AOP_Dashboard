@@ -433,7 +433,7 @@ function sumRevenue(aops: Aop[]): RevenueTargets {
 }
 
 function sumUniverse(aops: Aop[]): UniversePlanning {
-  const cats: SchoolCategoryPlan[] = ["A", "B", "C", "D", "Uncategorized", "Chain"].map(
+  const cats: SchoolCategoryPlan[] = ["A", "B", "C", "D", "Unknown", "Chain"].map(
     (category) => ({
       category,
       currentCount: 0,

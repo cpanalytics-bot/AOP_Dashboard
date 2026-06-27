@@ -173,7 +173,7 @@ export interface RevenueTargets {
   targetRevenuePerSchool: number;
 }
 
-// Live categories are A/B/C/D/Uncategorized/Chain (from school_category data);
+// Live categories are A/B/C/D/Unknown/Chain (by UDISE total_students; Chain = multi-district);
 // mock mode may still use its own labels, so this is a plain string.
 export interface SchoolCategoryPlan {
   category: string;

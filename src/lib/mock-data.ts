@@ -183,7 +183,7 @@ export function defaultAop(userId: string): Aop {
         { category: "B", currentCount: 28, activeCount: 22, userCount: 9, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
         { category: "C", currentCount: 22, activeCount: 15, userCount: 5, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
         { category: "D", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
-        { category: "Uncategorized", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
+        { category: "Unknown", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
         { category: "Chain", currentCount: 0, activeCount: 0, userCount: 0, targetCount: NaN, samplingCount: NaN, conversionCount: NaN, projectedRevenue: NaN, projectedConversion: NaN },
       ],
       activeSchoolAdditionPlan: 0,
