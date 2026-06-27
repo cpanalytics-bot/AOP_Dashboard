@@ -211,9 +211,13 @@ export interface AopKpis {
 export function computeAopKpis(aop: Aop): AopKpis {
   const rev = computeRevenueKpis(aop.revenue);
   const uni = computeUniverseKpis(aop.universe);
-  const retentionVal = Number.isFinite(aop.universe.retentionPlanValue) ? aop.universe.retentionPlanValue! : 0;
+  // Retention % = schools you plan to retain as a share of current ACTIVE schools
+  // (the retention plan is "schools retained from current active schools").
+  // BUGFIX: this previously used retentionPlanValue (₹) over activeSchools, giving
+  // nonsense like 825,688% (₹18,00,000 / 218). Use the retention COUNT.
+  const retentionCount = Number.isFinite(aop.universe.retentionSchoolCount) ? aop.universe.retentionSchoolCount! : 0;
   const activeSchools = Number.isFinite(aop.universe.activeSchools) ? aop.universe.activeSchools : 0;
-  const retentionPct = activeSchools > 0 ? round(pct(retentionVal, activeSchools)) : 0;
+  const retentionPct = activeSchools > 0 ? round(pct(retentionCount, activeSchools)) : 0;
   const conversionSchools = uni.totalConversionFromCategories;
   const targetSchools = uni.targetTotalFromCategories;
   const conversionPct = targetSchools > 0 ? round(pct(conversionSchools, targetSchools)) : 0;
