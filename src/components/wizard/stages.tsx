@@ -496,7 +496,7 @@ function LastYearCollectionRef({ email }: { email: string }) {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <KpiCard label="Total Order Value" value={fmtINR(totals.employee_order_value)} accent="indigo" sub="Σ order value of enabled customers" />
+        <KpiCard label="Total Order Value" value={fmtINR(totals.employee_order_value)} accent="indigo" sub="Σ order value, excl. cancelled (= last year revenue)" />
         <KpiCard label="Total Actual Collection" value={fmtINR(totals.actual_total)} accent="emerald" sub={`validated payments · ${fmtNum(totals.collection_pct)}% of order value`} />
       </div>
 
