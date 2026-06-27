@@ -279,9 +279,8 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
           <h3 className="t-card-heading">Schools In Your Area Today</h3>
           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Read only · Live</span>
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <KpiCard label="Total schools" value={fmtNum(u.totalSchools)} accent="slate" frozen sub="mapped in your area" />
-          <KpiCard label="Active schools" value={fmtNum(u.activeSchools)} accent="emerald" frozen sub="currently active" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <KpiCard label="Total schools" value={fmtNum(u.totalSchools)} accent="slate" frozen sub="active in your area" />
           <KpiCard label="User schools" value={fmtNum(u.userSchools)} accent="indigo" frozen sub="have transacted" />
           <KpiCard label="Non-user schools" value={fmtNum(u.nonUserSchools)} accent="amber" frozen sub="never ordered" />
         </div>
