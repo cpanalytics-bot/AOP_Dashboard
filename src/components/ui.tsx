@@ -259,11 +259,13 @@ export function Stat({
   value,
   sub,
   tone,
+  tip,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: "green" | "amber" | "red" | "default";
+  tip?: string;
 }) {
   const valueTone =
     tone === "green"
@@ -275,7 +277,7 @@ export function Stat({
           : "text-gray-900";
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-      <div className="t-overline">{label}</div>
+      <div className="t-overline">{label}{tip && <InfoTip text={tip} />}</div>
       <div className={`mt-1 text-xl font-semibold tracking-tight ${valueTone}`}>{value}</div>
       {sub && <div className="t-caption mt-0.5">{sub}</div>}
     </div>

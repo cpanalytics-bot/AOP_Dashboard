@@ -291,7 +291,7 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
         <h3 className="mb-1 t-card-heading">Retention</h3>
         <p className="t-caption mb-4">How many schools will you retain and at what value?</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Retention school count" required error={errors.retentionSchoolCount} note="Number of schools you will retain from current active schools.">
+          <Field label="Retention school count" required error={errors.retentionSchoolCount} note="Number of schools you will retain from your current user schools (existing customers that have already transacted).">
             <NumberInput value={u.retentionSchoolCount ?? NaN} onChange={(v) => setU("retentionSchoolCount", v)} disabled={readOnly} />
           </Field>
           <Field label="Retention school value" hint="INR" required error={errors.retentionPlanValue} note="Total revenue you expect from retained schools.">

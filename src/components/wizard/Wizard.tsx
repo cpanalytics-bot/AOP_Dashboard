@@ -445,12 +445,12 @@ function ReviewStage({
       <Card>
         <h3 className="mb-4 t-card-heading">Auto-generated KPIs</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label="Revenue growth" value={fmtPct(kpis.revenueGrowthPct)} tone={kpis.revenueGrowthPct >= 0 ? "green" : "red"} />
-          <Stat label="AOV growth" value={fmtPct(kpis.aovGrowthPct)} />
-          <Stat label="School growth" value={fmtPct(kpis.schoolGrowthPct)} />
-          <Stat label="Retention" value={fmtPct(kpis.retentionPct)} />
-          <Stat label="Conversion" value={fmtPct(kpis.conversionPct)} />
-          <Stat label="Revenue / school" value={fmtINR(kpis.revenuePerSchool)} />
+          <Stat label="Revenue growth" value={fmtPct(kpis.revenueGrowthPct)} tone={kpis.revenueGrowthPct >= 0 ? "green" : "red"} tip="Your total revenue target vs last year's actual revenue. (Target − Last year) ÷ Last year." />
+          <Stat label="AOV growth" value={fmtPct(kpis.aovGrowthPct)} tip="Your target average order value (AOV) vs your current AOV. (Target AOV − Current AOV) ÷ Current AOV." />
+          <Stat label="School growth" value={fmtPct(kpis.schoolGrowthPct)} tip="Schools you plan to target vs schools active today. (Target schools − Current active) ÷ Current active. Negative means you're planning fewer schools than are active now." />
+          <Stat label="Retention" value={fmtPct(kpis.retentionPct)} tip="Share of your existing customers (user schools — those that have already transacted) you plan to retain. Retention schools ÷ User schools." />
+          <Stat label="Conversion" value={fmtPct(kpis.conversionPct)} tip="Share of your target schools you expect to convert into orders. Planned conversions ÷ Target schools." />
+          <Stat label="Revenue / school" value={fmtINR(kpis.revenuePerSchool)} tip="Average revenue you're planning per target school. Total revenue target ÷ Target schools." />
         </div>
       </Card>
 
