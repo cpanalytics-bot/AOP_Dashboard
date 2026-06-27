@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import {
   Badge,
@@ -14,7 +14,7 @@ import {
   StatusPill,
   TextArea,
 } from "@/components/ui";
-import { EmployeeProfile } from "@/components/EmployeeProfile";
+import { EmployeeProfile, type EmployeeProfileHandle } from "@/components/EmployeeProfile";
 import { districtNames } from "@/lib/master-data";
 import {
   CollectionStage,
@@ -125,8 +125,12 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
     [draft],
   );
 
+  const profileRef = useRef<EmployeeProfileHandle | null>(null);
   const persist = (status?: AopStatus) => {
     if (rollup) return;
+    // "Save draft" also commits any in-progress Edit-Profile territory edits, so
+    // one button saves the plan AND the assigned states/districts/blocks.
+    profileRef.current?.commitTerritory();
     const next: Aop = {
       ...draft,
       status: status ?? (draft.status === "not_started" ? "draft" : draft.status),
@@ -344,7 +348,7 @@ export function Wizard({ employeeId: rawEmployeeId }: { employeeId: string }) {
       <div key={stageKey} className="stage-enter min-h-[40vh]">
         {stageKey === "revenue" && (
           <div className="space-y-4">
-            <EmployeeProfile userId={employeeId} />
+            <EmployeeProfile userId={employeeId} ref={profileRef} />
             <RevenueStage aop={draft} patch={patch} errors={errors} readOnly={readOnly} />
           </div>
         )}

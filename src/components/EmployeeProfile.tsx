@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, SearchableMultiSelect, Select, TextInput } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { supabaseConfigured } from "@/lib/supabase/client";
@@ -15,7 +15,13 @@ import {
 } from "@/lib/supabase/aop-data";
 import { districts as masterDistricts } from "@/lib/master-data";
 
-export function EmployeeProfile({ userId }: { userId: string }) {
+export interface EmployeeProfileHandle {
+  /** Persist any in-progress Edit-Profile territory edits (base/states/districts/blocks). */
+  commitTerritory: () => void;
+}
+
+export const EmployeeProfile = forwardRef<EmployeeProfileHandle, { userId: string }>(
+  function EmployeeProfile({ userId }, ref) {
   const { users, canEditProfile, updateUserProfile, updateTbhMember } = useStore();
   const user = users.find((u) => u.id === userId);
   const manager = users.find((u) => u.id === user?.reportingManagerId);
@@ -171,6 +177,17 @@ export function EmployeeProfile({ userId }: { userId: string }) {
     districtCounts[d] != null ? `${d} (${schoolsSuffix(districtCounts[d])})` : d;
   const blockLabel = (b: string) =>
     blockCounts[b] != null ? `${b} (${schoolsSuffix(blockCounts[b])})` : b;
+
+  // Let the wizard's "Save draft" also commit in-progress territory edits, so a
+  // user who edits districts/blocks doesn't have to also click the profile Save.
+  useImperativeHandle(ref, () => ({
+    commitTerritory: () => {
+      if (editing && editable) {
+        updateUserProfile(userId, { baseLocation, districtIds: selDistricts, states: selStates, blocks });
+        setEditing(false);
+      }
+    },
+  }));
 
   if (!user) return null;
 
@@ -330,7 +347,7 @@ export function EmployeeProfile({ userId }: { userId: string }) {
       </dl>
     </Card>
   );
-}
+});
 
 function ProfileItem({ label, value }: { label: string; value: string }) {
   return (
