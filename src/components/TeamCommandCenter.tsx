@@ -26,6 +26,7 @@ import {
 } from "@/lib/calc";
 import { districtNames } from "@/lib/master-data";
 import { useStore } from "@/lib/store";
+import { statusRank } from "@/lib/types";
 import type { Aop, AopStatus, Role, User } from "@/lib/types";
 
 // Status visuals are centralised in `aopStatusMeta` (ui.tsx).
@@ -198,6 +199,9 @@ export function TeamCommandCenter({
       }
     };
     return [...enriched].sort((a, b) => {
+      // Primary: submitted/in-review on top, draft/not-started at the bottom.
+      const rank = statusRank(a.aop.status) - statusRank(b.aop.status);
+      if (rank !== 0) return rank;
       const av = val(a), bv = val(b);
       const cmp = typeof av === "string" && typeof bv === "string" ? av.localeCompare(bv) : Number(av) - Number(bv);
       return detailSort.dir === "asc" ? cmp : -cmp;

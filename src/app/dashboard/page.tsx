@@ -14,6 +14,7 @@ import {
   fmtNum,
   fmtPct,
 } from "@/lib/calc";
+import { statusRank } from "@/lib/types";
 import type { User } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -139,6 +140,12 @@ function TeamDashboard() {
     };
   }), [team, getAop]);
 
+  // Render order: submitted/in-review on top, draft/not-started at the bottom.
+  const orderedDetailRows = useMemo(
+    () => [...detailedRows].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
+    [detailedRows],
+  );
+
   const totalTarget = detailedRows.reduce((s, r) => s + r.target, 0);
   const totalSchools = detailedRows.reduce((s, r) => s + r.targetSchools, 0);
   const submitted = detailedRows.filter((r) => ["submitted", "approved", "in_review"].includes(r.status)).length;
@@ -235,7 +242,7 @@ function TeamDashboard() {
               </tr>
             </thead>
             <tbody>
-              {detailedRows.map((r) => (
+              {orderedDetailRows.map((r) => (
                 <tr key={r.user.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
                   <td className="py-2 px-2 font-medium text-gray-900 sticky left-0 bg-white">
                     <Link href={`/aop/${encodeURIComponent(r.user.id)}`} className="hover:text-indigo-600">{r.user.name}</Link>

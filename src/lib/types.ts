@@ -17,6 +17,22 @@ export type AopStatus =
   | "approved"
   | "rejected";
 
+// Display ordering for member-plan lists: plans that need review (submitted /
+// in-review) float to the TOP; draft / not-started sink to the BOTTOM. Used as
+// the primary sort key across all member tables. Lower rank = higher up.
+export const statusRank = (s: AopStatus): number => {
+  switch (s) {
+    case "submitted":
+    case "in_review": return 0;
+    case "changes_requested": return 1;
+    case "approved": return 2;
+    case "rejected": return 3;
+    case "draft": return 4;
+    case "not_started": return 5;
+    default: return 9;
+  }
+};
+
 export type HiringStatus =
   | "Requested"
   | "Approved"

@@ -677,6 +677,7 @@ export interface AdminOverviewRow {
   member_role: string; city_district: string | null; member_status: AopStatus;
   is_filled: boolean; revenue_target: number | null; target_aov: number | null; target_schools: number | null;
   last_year_revenue: number | null; active_schools: number | null;
+  total_schools: number | null; reimbursement_budget: number | null;
 }
 export async function liveAdminOverview(): Promise<AdminOverviewRow[]> {
   const { data, error } = await sb().rpc("aop_admin_overview");

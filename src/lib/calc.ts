@@ -386,6 +386,18 @@ export const fmtINR = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n || 0);
 
+// Compact Indian currency: ₹60,00,000 -> ₹60L, ₹1,00,00,000 -> ₹1Cr, ₹50,000 -> ₹50K.
+// Used in the admin table where full ₹ figures are too wide.
+export const fmtINRShort = (n: number): string => {
+  const v = n || 0;
+  const abs = Math.abs(v);
+  const trim = (x: number) => String(Math.round(x * 100) / 100); // up to 2 dp, no trailing zeros
+  if (abs >= 1e7) return `₹${trim(v / 1e7)}Cr`;
+  if (abs >= 1e5) return `₹${trim(v / 1e5)}L`;
+  if (abs >= 1e3) return `₹${trim(v / 1e3)}K`;
+  return `₹${trim(v)}`;
+};
+
 export const fmtNum = (n: number) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(n || 0);
 
