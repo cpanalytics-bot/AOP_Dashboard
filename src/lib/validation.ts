@@ -46,6 +46,7 @@ export const categorySchema = z.object({
   category: z.string(),
   currentCount: auto,
   activeCount: auto,
+  sampledCount: auto,
   userCount: auto,
   targetCount: reqNum,
   samplingCount: reqNum,

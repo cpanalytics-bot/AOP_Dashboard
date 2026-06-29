@@ -181,6 +181,9 @@ export interface SchoolCategoryPlan {
   currentCount: number;
   /** Active schools in this category today (subset of currentCount). 🔵 auto. */
   activeCount: number;
+  /** Sampled schools in this category today (subset of activeCount this employee
+   *  has a sample submission for). 🔵 auto. NaN/blank for Chain. */
+  sampledCount: number;
   /** User schools in this category today (have transacted). 🔵 auto. */
   userCount: number;
   targetCount: number;

@@ -34,16 +34,20 @@ function buildCategories(
   const totalMap = new Map<string, number>();
   const activeMap = new Map<string, number>();
   const userMap = new Map<string, number>();
+  const sampledMap = new Map<string, number>();
   (snap?.categories ?? []).forEach((c) => {
     totalMap.set(c.category, c.current_count);
     activeMap.set(c.category, c.active_count ?? 0);
     userMap.set(c.category, c.user_count ?? 0);
+    sampledMap.set(c.category, c.sampled_count ?? 0);
   });
   return UNIVERSE_CATEGORIES.map((cat) => {
     const sv = saved.get(cat);
     const current = sv?.current_count ?? (cat === "Chain" ? snap?.chain ?? 0 : totalMap.get(cat) ?? 0);
-    // Active/User are always "today" snapshot values (not user-editable).
+    // Active/Sampled/User are always "today" snapshot values (not user-editable).
     const active = cat === "Chain" ? snap?.chain ?? 0 : activeMap.get(cat) ?? 0;
+    // Chain has no sample-table category source, so it falls through to 0.
+    const sampled = sampledMap.get(cat) ?? 0;
     const user = cat === "Chain" ? 0 : userMap.get(cat) ?? 0;
     const target = sv ? sv.target_count : NaN;          // blank until entered
     const conv = sv ? sv.projected_conversion_pct : NaN;
@@ -51,6 +55,7 @@ function buildCategories(
       category: cat,
       currentCount: current,
       activeCount: active,
+      sampledCount: sampled,
       userCount: user,
       targetCount: target,
       samplingCount: sv ? sv.sampling_count : NaN,
@@ -238,7 +243,7 @@ export interface MemberSnapshot {
   universe?: { total_schools: number; active_schools: number; user_schools: number; non_user_schools: number };
   chain?: number;
   ytd?: number;
-  categories?: { category: string; current_count: number; active_count?: number; user_count?: number }[];
+  categories?: { category: string; current_count: number; active_count?: number; user_count?: number; sampled_count?: number }[];
 }
 
 export async function liveSnapshot(email: string): Promise<MemberSnapshot> {

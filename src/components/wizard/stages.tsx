@@ -303,22 +303,30 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
       {/* 3. School Type Table */}
       <Card>
         <h3 className="mb-1 t-card-heading">School Types <span className="text-rose-500">*</span></h3>
-        <p className="t-caption mb-1">For each category you see today&apos;s <span className="font-medium text-gray-600">Active</span> and <span className="font-medium text-gray-600">User</span> schools (read-only). <span className="font-medium text-gray-600">Target, Sampling and Conversion are required for every type.</span></p>
+        <p className="t-caption mb-1">For each category you see today&apos;s <span className="font-medium text-gray-600">Active</span>, <span className="font-medium text-gray-600">Sampled</span>, <span className="font-medium text-gray-600">User</span> schools and <span className="font-medium text-gray-600">LY Conversion %</span> (read-only). <span className="font-medium text-gray-600">Target, Sampling and Conversion are required for every type.</span></p>
         {(errors.targetCount || errors.samplingCount || errors.conversionCount) && (
           <p className="mb-2 text-[12px] font-medium text-rose-600">Fill Target, Sampling and Conversion for every school type.</p>
         )}
         <div className="space-y-2 scroll-mt-28" data-field-error={(errors.targetCount || errors.samplingCount || errors.conversionCount) ? "true" : undefined}>
           {/* Header row */}
-          <div className="hidden grid-cols-6 gap-2 px-1 sm:grid">
+          <div className="hidden grid-cols-8 gap-2 px-1 sm:grid">
             <span className="t-overline">Type</span>
             <span className="t-overline">Active</span>
+            <span className="t-overline">Sampled</span>
             <span className="t-overline">User</span>
+            <span className="t-overline">LY Conv %</span>
             <span className="t-overline">Target <span className="text-rose-500">*</span></span>
             <span className="t-overline">Sampling <span className="text-rose-500">*</span></span>
             <span className="t-overline">Conversion <span className="text-rose-500">*</span></span>
           </div>
-          {u.categories.map((c, idx) => (
-            <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-6">
+          {u.categories.map((c, idx) => {
+            // LY Conversion % = User / Sampled (read-only). When Sampled has no
+            // value (0 or unavailable, e.g. Chain), show 0%.
+            const lyConv = Number.isFinite(c.sampledCount) && c.sampledCount > 0
+              ? Math.round((c.userCount / c.sampledCount) * 100)
+              : 0;
+            return (
+            <div key={c.category} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 sm:grid-cols-8">
               <div className="col-span-2 flex items-center gap-1 self-center text-[13px] font-medium text-gray-900 sm:col-span-1">
                 {c.category}
                 <InfoTooltip text={CATEGORY_DEFINITIONS[c.category] ?? `School category: ${c.category}`} />
@@ -328,10 +336,22 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
                 <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Active:</span></div>
                 <NumberInput value={c.activeCount} onChange={() => {}} disabled />
               </div>
+              {/* Frozen — sampled schools today */}
+              <div className="self-center">
+                <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">Sampled:</span></div>
+                <NumberInput value={c.sampledCount} onChange={() => {}} disabled />
+              </div>
               {/* Frozen — user schools today */}
               <div className="self-center">
                 <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">User:</span></div>
                 <NumberInput value={c.userCount} onChange={() => {}} disabled />
+              </div>
+              {/* Frozen — LY Conversion % (derived: Sampled / User) */}
+              <div className="self-center">
+                <div className="flex items-center gap-1 sm:hidden"><span className="t-overline text-[10px]">LY Conv %:</span></div>
+                <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-500 sm:text-sm">
+                  {`${lyConv}%`}
+                </div>
               </div>
               {/* Target Schools — editable */}
               <div>
@@ -349,7 +369,8 @@ export function UniverseStage({ aop, patch, errors, readOnly }: StageProps) {
                 <NumberInput value={c.conversionCount} onChange={(v) => setCat(idx, "conversionCount", v)} disabled={readOnly} placeholder="Count" invalid={!!errors.conversionCount && !Number.isFinite(c.conversionCount)} />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {/* Bottom summary — reordered: Target → Sampling → Conversion → Growth */}
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

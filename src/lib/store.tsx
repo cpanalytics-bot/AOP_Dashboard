@@ -539,7 +539,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     a.universe.activeSchools = 0;
     a.universe.userSchools = 0;
     a.universe.nonUserSchools = 0;
-    a.universe.categories = a.universe.categories.map((c) => ({ ...c, currentCount: 0, activeCount: 0, userCount: 0 }));
+    a.universe.categories = a.universe.categories.map((c) => ({ ...c, currentCount: 0, activeCount: 0, sampledCount: 0, userCount: 0 }));
     return a;
   };
 

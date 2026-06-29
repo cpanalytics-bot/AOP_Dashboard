@@ -447,6 +447,7 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
       category,
       currentCount: 0,
       activeCount: 0,
+      sampledCount: 0,
       userCount: 0,
       targetCount: 0,
       samplingCount: 0,
@@ -472,6 +473,7 @@ function sumUniverse(aops: Aop[]): UniversePlanning {
       u.categories.forEach((c, i) => {
         cats[i].currentCount += fin(c.currentCount);
         cats[i].activeCount += fin(c.activeCount);
+        cats[i].sampledCount += fin(c.sampledCount);
         cats[i].userCount += fin(c.userCount);
         cats[i].targetCount += c.targetCount;
         cats[i].samplingCount += (Number.isFinite(c.samplingCount) ? c.samplingCount : 0);
